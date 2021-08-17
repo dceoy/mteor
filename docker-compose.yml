@@ -1,0 +1,15 @@
+---
+version: '3'
+
+services:
+  mteor:
+    container_name: mteor
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dceoy/mteor:latest
+    volumes:
+      - ${PWD}:/wd
+    working_dir: /wd
+    entrypoint:
+      - mteor
