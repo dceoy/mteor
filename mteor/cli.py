@@ -22,14 +22,13 @@ import os
 
 import MetaTrader5 as Mt5
 from docopt import docopt
-from oandacli.util.logger import set_log_config
 
 from . import __version__
 
 
 def main():
     args = docopt(__doc__, version=f'mteor {__version__}')
-    set_log_config(debug=args['--debug'], info=args['--info'])
+    _set_log_config(debug=args['--debug'], info=args['--info'])
     logger = logging.getLogger(__name__)
     logger.debug(f'args:{os.linesep}{args}')
     if args['mt5']:
@@ -50,3 +49,16 @@ def main():
         print(Mt5.terminal_info())
         print(Mt5.version())
         Mt5.shutdown()
+
+
+def _set_log_config(debug=None, info=None):
+    if debug:
+        lv = logging.DEBUG
+    elif info:
+        lv = logging.INFO
+    else:
+        lv = logging.WARNING
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)-8s %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S', level=lv
+    )
