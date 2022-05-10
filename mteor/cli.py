@@ -32,32 +32,44 @@ def main():
     _set_log_config(debug=args['--debug'], info=args['--info'])
     logger = logging.getLogger(__name__)
     logger.debug(f'args:{os.linesep}{args}')
+    _initialize_mt5(args=args)
     if args['mt5']:
-        print('MetaTrader5 package author: ', Mt5.__author__)
-        print('MetaTrader5 package version: ', Mt5.__version__)
-        initialize_kwargs = {
-            **({'path': args['--mt5-exe']} if args['--mt5-exe'] else dict()),
-            **(
-                {'login': int(args['--mt5-login'])}
-                if args['--mt5-login'] else dict()
-            ),
-            **(
-                {'password': args['--mt5-password']}
-                if args['--mt5-password'] else dict()
-            ),
-            **(
-                {'server': args['--mt5-server']}
-                if args['--mt5-server'] else dict()
-            )
-        }
-        if not Mt5.initialize(**initialize_kwargs):
-            raise RuntimeError(
-                'MetaTrader5.initialize() failed, error code =',
-                Mt5.last_error()
-            )
-        print(Mt5.terminal_info())
-        print(Mt5.version())
-        Mt5.shutdown()
+        _print_mt5_info()
+    else:
+        pass
+    Mt5.shutdown()
+
+
+def _print_mt5_info():
+    print(f'MetaTrader5 package author:\t{Mt5.__author__}')
+    print(f'MetaTrader5 package version:\t{Mt5.__version__}')
+    print('Terminal version:\t{}'.format(Mt5.version()))
+    print('Terminal status and settings:\t{}'.format(Mt5.terminal_info()))
+    print('Trading account info:\t{}'.format(Mt5.account_info()))
+    print('Financial instruments:\t{}'.format(Mt5.symbols_total()))
+
+
+def _initialize_mt5(args):
+    initialize_kwargs = {
+        **({'path': args['--mt5-exe']} if args['--mt5-exe'] else dict()),
+        **(
+            {'login': int(args['--mt5-login'])}
+            if args['--mt5-login'] else dict()
+        ),
+        **(
+            {'password': args['--mt5-password']}
+            if args['--mt5-password'] else dict()
+        ),
+        **(
+            {'server': args['--mt5-server']}
+            if args['--mt5-server'] else dict()
+        )
+    }
+    if not Mt5.initialize(**initialize_kwargs):
+        raise RuntimeError(
+            'MetaTrader5.initialize() failed, '
+            + 'error code = {}'.format(Mt5.last_error())
+        )
 
 
 def _set_log_config(debug=None, info=None):
