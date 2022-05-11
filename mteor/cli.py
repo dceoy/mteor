@@ -33,9 +33,9 @@ Arguments:
   <instrument>          Financial instrument symbol
 """
 
-import json
 import logging
 import os
+from pprint import pformat, pprint
 
 import MetaTrader5 as Mt5
 import pandas as pd
@@ -73,7 +73,7 @@ def _print_symbol_info(symbol, indent=4):
     if not selected_symbol:
         raise RuntimeError(f'Failed to select: {symbol}')
     else:
-        print(json.dumps(Mt5.symbol_info(symbol)._asdict(), indent=indent))
+        pprint(Mt5.symbol_info(symbol)._asdict())
 
 
 def _print_ohlc(symbol, granularity, count, start_pos=0,
@@ -103,9 +103,17 @@ def _print_mt5_info():
     print(f'MetaTrader5 package author:\t{Mt5.__author__}')
     print(f'MetaTrader5 package version:\t{Mt5.__version__}')
     print('Terminal version:\t{}'.format(Mt5.version()))
-    print('Terminal status and settings:\t{}'.format(Mt5.terminal_info()))
-    print('Trading account info:\t{}'.format(Mt5.account_info()))
+    print(
+        'Terminal status and settings:' + os.linesep
+        + pformat(Mt5.terminal_info()._asdict())
+    )
+    print(
+        'Trading account info:' + os.linesep
+        + pformat(Mt5.account_info()._asdict())
+    )
     print('Number of financial instruments:\t{}'.format(Mt5.symbols_total()))
+    print('Number of active orders:\t{}'.format(Mt5.orders_total()))
+    print('Number of open positions:\t{}'.format(Mt5.positions_total()))
 
 
 def _initialize_mt5(args):
