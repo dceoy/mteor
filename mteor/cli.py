@@ -7,9 +7,16 @@ Usage:
   mteor --version
   mteor mt5 [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>]
+  mteor symbol [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
   mteor ohlc [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] [--granularity=<str>]
     [--count=<int>] <instrument>
+
+Commands:
+    mt5                 Print MT5 versions, status, and settings
+    symbol              Print information about a financial instrument
+    ohlc                Print rates of a financial instrument
 
 Options:
   -h, --help            Print help and exit
@@ -26,6 +33,7 @@ Arguments:
   <instrument>          Financial instrument symbol
 """
 
+import json
 import logging
 import os
 
@@ -42,16 +50,30 @@ def main():
     logger = logging.getLogger(__name__)
     logger.debug(f'args:{os.linesep}{args}')
     _initialize_mt5(args=args)
-    if args['mt5']:
-        _print_mt5_info()
-    elif args['ohlc']:
-        _print_ohlc(
-            symbol=args['<instrument>'], granularity=args['--granularity'],
-            count=int(args['--count'])
-        )
+    try:
+        if args['mt5']:
+            _print_mt5_info()
+        elif args['symbol']:
+            _print_symbol_info(symbol=args['<instrument>'])
+        elif args['ohlc']:
+            _print_ohlc(
+                symbol=args['<instrument>'], granularity=args['--granularity'],
+                count=int(args['--count'])
+            )
+        else:
+            pass
+    except Exception as e:
+        raise e
+    finally:
+        Mt5.shutdown()
+
+
+def _print_symbol_info(symbol, indent=4):
+    selected_symbol = Mt5.symbol_select(symbol, True)
+    if not selected_symbol:
+        raise RuntimeError(f'Failed to select: {symbol}')
     else:
-        pass
-    Mt5.shutdown()
+        print(json.dumps(Mt5.symbol_info(symbol)._asdict(), indent=indent))
 
 
 def _print_ohlc(symbol, granularity, count, start_pos=0,
