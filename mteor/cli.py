@@ -9,14 +9,18 @@ Usage:
     [--mt5-password=<str>] [--mt5-server=<str>]
   mteor symbol [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
-  mteor ohlc [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+  mteor rate [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] [--granularity=<str>]
     [--count=<int>] <instrument>
+  mteor tick [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    [--mt5-password=<str>] [--mt5-server=<str>] [--period=<sec>]
+    [--date-to=<date>] <instrument>
 
 Commands:
     mt5                 Print MT5 versions, status, and settings
     symbol              Print information about a financial instrument
-    ohlc                Print rates of a financial instrument
+    rate                Print rates of a financial instrument
+    tick                Print ticks of a financial instrument
 
 Options:
   -h, --help            Print help and exit
@@ -28,6 +32,8 @@ Options:
   --mt5-server=<str>    Specify a MT5 trade server name
   --granularity=<str>   Specify a timeframe granularity [default: M1]
   --count=<int>         Specify a record count [default: 10]
+  --period=<sec>        Specify a period of seconds to look back [default: 60]
+  --date-to=<date>      Specify an ending datetime
 
 Arguments:
   <instrument>          Financial instrument symbol
@@ -35,6 +41,7 @@ Arguments:
 
 import logging
 import os
+from datetime import datetime, timedelta
 from pprint import pformat, pprint
 
 import MetaTrader5 as Mt5
@@ -55,10 +62,15 @@ def main():
             _print_mt5_info()
         elif args['symbol']:
             _print_symbol_info(symbol=args['<instrument>'])
-        elif args['ohlc']:
-            _print_ohlc(
+        elif args['rate']:
+            _print_rate(
                 symbol=args['<instrument>'], granularity=args['--granularity'],
                 count=int(args['--count'])
+            )
+        elif args['tick']:
+            _print_tick(
+                symbol=args['<instrument>'], period=float(args['--period']),
+                date_to=args['--date-to']
             )
         else:
             pass
@@ -76,16 +88,35 @@ def _print_symbol_info(symbol, indent=4):
         pprint(Mt5.symbol_info(symbol)._asdict())
 
 
-def _print_ohlc(symbol, granularity, count, start_pos=0,
-                display_max_columns=500, display_width=1500):
+def _print_tick(symbol, period, date_to=None):
+    _print_df(_fetch_df_tick(symbol=symbol, period=period, date_to=date_to))
+
+
+def _fetch_df_tick(symbol, period, date_to=None):
+    end_date = (pd.to_datetime(date_to) if date_to else datetime.now())
+    return pd.DataFrame(
+        Mt5.copy_ticks_range(
+            symbol, (end_date - timedelta(seconds=period)), end_date,
+            Mt5.COPY_TICKS_ALL
+        )
+    ).assign(
+        time=lambda d: pd.to_datetime(d['time'], unit='s')
+    ).set_index('time')
+
+
+def _print_df(df, display_max_columns=500, display_width=1500):
     pd.set_option('display.max_columns', display_max_columns)
-    pd.set_option('display.max_rows', count)
     pd.set_option('display.width', display_width)
-    print(
+    pd.set_option('display.max_rows', df.shape[0])
+    print(df.reset_index().to_string(index=False))
+
+
+def _print_rate(symbol, granularity, count, start_pos=0):
+    _print_df(
         _fetch_df_rate(
             symbol=symbol, granularity=granularity, count=count,
             start_pos=start_pos
-        ).reset_index().to_string(index=False)
+        )
     )
 
 
