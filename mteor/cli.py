@@ -17,6 +17,8 @@ Usage:
     [--date-to=<date>] <instrument>
   mteor margin [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
+  mteor position [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    [--mt5-password=<str>] [--mt5-server=<str>]
 
 Commands:
     mt5                 Print MT5 versions, status, and settings
@@ -24,6 +26,7 @@ Commands:
     rate                Print rates of a financial instrument
     tick                Print ticks of a financial instrument
     margin              Print minimum margins to perform trading operations
+    position            Print open positions
 
 Options:
   -h, --help            Print help and exit
@@ -78,12 +81,18 @@ def main():
             )
         elif args['margin']:
             _print_margin(symbol=args['<instrument>'])
+        elif args['position']:
+            _print_position()
         else:
             pass
     except Exception as e:
         raise e
     finally:
         Mt5.shutdown()
+
+
+def _print_position():
+    pprint([p._asdict() for p in Mt5.positions_get()])
 
 
 def _print_margin(symbol):
