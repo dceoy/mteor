@@ -13,8 +13,8 @@ Usage:
     [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
     [--granularity=<str>] [--count=<int>] <instrument>
   mteor tick [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>] [--period=<sec>]
-    [--date-to=<date>] <instrument>
+    [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
+    [--seconds=<float>] [--date-to=<date>] <instrument>
   mteor margin [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
   mteor position [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
@@ -22,7 +22,7 @@ Usage:
   mteor order [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>]
   mteor deal [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--period=<sec>]
+    [--mt5-password=<str>] [--mt5-server=<str>] [--hours=<floatt>]
     [--date-to=<date>]
 
 Commands:
@@ -46,8 +46,9 @@ Options:
   --csv=<path>          Write data with CSV into a file
   --granularity=<str>   Specify a timeframe granularity [default: M1]
   --count=<int>         Specify a record count [default: 10]
-  --period=<sec>        Specify a period of seconds to look back [default: 60]
+  --seconds=<float>     Specify a period of seconds to look back [default: 60]
   --date-to=<date>      Specify an ending datetime
+  --hours=<float>       Specify a period of hours to look back [default: 24]
 
 Arguments:
   <instrument>          Financial instrument symbol
@@ -83,7 +84,7 @@ def main():
             )
         elif args['tick']:
             _print_tick(
-                symbol=args['<instrument>'], period=args['--period'],
+                symbol=args['<instrument>'], seconds=args['--seconds'],
                 date_to=args['--date-to'], csv_path=args['--csv']
             )
         elif args['margin']:
@@ -91,7 +92,7 @@ def main():
         elif args['position']:
             _print_position()
         elif args['deal']:
-            _print_deal(period=args['--period'], date_to=args['--date-to'])
+            _print_deal(hours=args['--hours'], date_to=args['--date-to'])
         else:
             pass
     except Exception as e:
@@ -101,14 +102,14 @@ def main():
         Mt5.shutdown()
 
 
-def _print_deal(period, date_to=None, group=None):
+def _print_deal(hours, date_to=None, group=None):
     end_date = (
         pd.to_datetime(date_to) if date_to
         else (datetime.now() + timedelta(seconds=1))
     )
     pprint([
         p._asdict() for p in Mt5.history_deals_get(
-            (end_date - timedelta(seconds=float(period))), end_date,
+            (end_date - timedelta(hours=float(hours))), end_date,
             **({'group': group} if group else dict())
         )
     ])
@@ -140,21 +141,21 @@ def _print_margin(symbol):
     })
 
 
-def _print_tick(symbol, period, date_to=None, csv_path=None):
+def _print_tick(symbol, seconds, date_to=None, csv_path=None):
     _print_df(
-        _fetch_df_tick(symbol=symbol, period=period, date_to=date_to),
+        _fetch_df_tick(symbol=symbol, seconds=seconds, date_to=date_to),
         csv_path=csv_path
     )
 
 
-def _fetch_df_tick(symbol, period, date_to=None):
+def _fetch_df_tick(symbol, seconds, date_to=None):
     end_date = (
         pd.to_datetime(date_to) if date_to
         else (datetime.now() + timedelta(seconds=1))
     )
     return pd.DataFrame(
         Mt5.copy_ticks_range(
-            symbol, (end_date - timedelta(seconds=float(period))), end_date,
+            symbol, (end_date - timedelta(seconds=float(seconds))), end_date,
             Mt5.COPY_TICKS_ALL
         )
     ).assign(
