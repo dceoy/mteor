@@ -15,12 +15,15 @@ Usage:
   mteor tick [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>] [--period=<sec>]
     [--date-to=<date>] <instrument>
+  mteor margin [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    [--mt5-password=<str>] [--mt5-server=<str>] [--volume=<float>] <instrument>
 
 Commands:
     mt5                 Print MT5 versions, status, and settings
     symbol              Print information about a financial instrument
     rate                Print rates of a financial instrument
     tick                Print ticks of a financial instrument
+    margin              Print margins in the account currency for trading
 
 Options:
   -h, --help            Print help and exit
@@ -35,6 +38,7 @@ Options:
   --count=<int>         Specify a record count [default: 10]
   --period=<sec>        Specify a period of seconds to look back [default: 60]
   --date-to=<date>      Specify an ending datetime
+  --volume=<float>      Specify a trading operation volume
 
 Arguments:
   <instrument>          Financial instrument symbol
@@ -66,13 +70,15 @@ def main():
         elif args['rate']:
             _print_rate(
                 symbol=args['<instrument>'], granularity=args['--granularity'],
-                count=int(args['--count']), csv_path=args['--csv']
+                count=args['--count'], csv_path=args['--csv']
             )
         elif args['tick']:
             _print_tick(
-                symbol=args['<instrument>'], period=float(args['--period']),
+                symbol=args['<instrument>'], period=args['--period'],
                 date_to=args['--date-to'], csv_path=args['--csv']
             )
+        elif args['margin']:
+            _print_margin(symbol=args['<instrument>'], volume=args['--volume'])
         else:
             pass
     except Exception as e:
@@ -81,12 +87,18 @@ def main():
         Mt5.shutdown()
 
 
-def _print_symbol_info(symbol, indent=4):
-    selected_symbol = Mt5.symbol_select(symbol, True)
-    if not selected_symbol:
-        raise RuntimeError(f'Failed to select: {symbol}')
-    else:
-        pprint(Mt5.symbol_info(symbol)._asdict())
+def _print_margin(symbol, volume=None):
+    lot = (float(volume) if volume else Mt5.symbol_info(symbol).volume_min)
+    symbol_info_tick = Mt5.symbol_info_tick(symbol)
+    pprint({
+        'account_currency': Mt5.account_info().currency, 'volume': lot,
+        'ask': Mt5.order_calc_margin(
+            Mt5.ORDER_TYPE_BUY, symbol, lot, symbol_info_tick.ask
+        ),
+        'bid': Mt5.order_calc_margin(
+            Mt5.ORDER_TYPE_SELL, symbol, lot, symbol_info_tick.bid
+        )
+    })
 
 
 def _print_tick(symbol, period, date_to=None, csv_path=None):
@@ -97,10 +109,13 @@ def _print_tick(symbol, period, date_to=None, csv_path=None):
 
 
 def _fetch_df_tick(symbol, period, date_to=None):
-    end_date = (pd.to_datetime(date_to) if date_to else datetime.now())
+    end_date = (
+        pd.to_datetime(date_to) if date_to
+        else (datetime.now() + timedelta(seconds=1))
+    )
     return pd.DataFrame(
         Mt5.copy_ticks_range(
-            symbol, (end_date - timedelta(seconds=period)), end_date,
+            symbol, (end_date - timedelta(seconds=float(period))), end_date,
             Mt5.COPY_TICKS_ALL
         )
     ).assign(
@@ -130,11 +145,20 @@ def _print_rate(symbol, granularity, count, start_pos=0, csv_path=None):
 def _fetch_df_rate(symbol, granularity, count, start_pos=0):
     return pd.DataFrame(
         Mt5.copy_rates_from_pos(
-            symbol, getattr(Mt5, f'TIMEFRAME_{granularity}'), start_pos, count
+            symbol, getattr(Mt5, f'TIMEFRAME_{granularity}'), start_pos,
+            int(count)
         )
     ).assign(
         time=lambda d: pd.to_datetime(d['time'], unit='s')
     ).set_index('time')
+
+
+def _print_symbol_info(symbol, indent=4):
+    selected_symbol = Mt5.symbol_select(symbol, True)
+    if not selected_symbol:
+        raise RuntimeError(f'Failed to select: {symbol}')
+    else:
+        pprint(Mt5.symbol_info(symbol)._asdict())
 
 
 def _print_mt5_info():
