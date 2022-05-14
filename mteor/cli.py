@@ -10,10 +10,10 @@ Usage:
   mteor symbol [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
   mteor rate [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--granularity=<str>]
-    [--count=<int>] <instrument>
+    [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
+    [--granularity=<str>] [--count=<int>] <instrument>
   mteor tick [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--period=<sec>]
+    [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>] [--period=<sec>]
     [--date-to=<date>] <instrument>
 
 Commands:
@@ -30,6 +30,7 @@ Options:
   --mt5-login=<str>     Specify a MT5 trading account number
   --mt5-password=<str>  Specify a MT5 trading account password
   --mt5-server=<str>    Specify a MT5 trade server name
+  --csv=<path>          Write data with CSV into a file
   --granularity=<str>   Specify a timeframe granularity [default: M1]
   --count=<int>         Specify a record count [default: 10]
   --period=<sec>        Specify a period of seconds to look back [default: 60]
@@ -65,12 +66,12 @@ def main():
         elif args['rate']:
             _print_rate(
                 symbol=args['<instrument>'], granularity=args['--granularity'],
-                count=int(args['--count'])
+                count=int(args['--count']), csv_path=args['--csv']
             )
         elif args['tick']:
             _print_tick(
                 symbol=args['<instrument>'], period=float(args['--period']),
-                date_to=args['--date-to']
+                date_to=args['--date-to'], csv_path=args['--csv']
             )
         else:
             pass
@@ -88,8 +89,11 @@ def _print_symbol_info(symbol, indent=4):
         pprint(Mt5.symbol_info(symbol)._asdict())
 
 
-def _print_tick(symbol, period, date_to=None):
-    _print_df(_fetch_df_tick(symbol=symbol, period=period, date_to=date_to))
+def _print_tick(symbol, period, date_to=None, csv_path=None):
+    _print_df(
+        _fetch_df_tick(symbol=symbol, period=period, date_to=date_to),
+        csv_path=csv_path
+    )
 
 
 def _fetch_df_tick(symbol, period, date_to=None):
@@ -104,19 +108,22 @@ def _fetch_df_tick(symbol, period, date_to=None):
     ).set_index('time')
 
 
-def _print_df(df, display_max_columns=500, display_width=1500):
+def _print_df(df, csv_path=None, display_max_columns=500, display_width=1500):
     pd.set_option('display.max_columns', display_max_columns)
     pd.set_option('display.width', display_width)
     pd.set_option('display.max_rows', df.shape[0])
     print(df.reset_index().to_string(index=False))
+    if csv_path:
+        df.to_csv(csv_path)
 
 
-def _print_rate(symbol, granularity, count, start_pos=0):
+def _print_rate(symbol, granularity, count, start_pos=0, csv_path=None):
     _print_df(
         _fetch_df_rate(
             symbol=symbol, granularity=granularity, count=count,
             start_pos=start_pos
-        )
+        ),
+        csv_path=csv_path
     )
 
 
