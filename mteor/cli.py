@@ -16,14 +16,14 @@ Usage:
     [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>] [--period=<sec>]
     [--date-to=<date>] <instrument>
   mteor margin [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--volume=<float>] <instrument>
+    [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
 
 Commands:
     mt5                 Print MT5 versions, status, and settings
     symbol              Print information about a financial instrument
     rate                Print rates of a financial instrument
     tick                Print ticks of a financial instrument
-    margin              Print margins in the account currency for trading
+    margin              Print minimum margins to perform trading operations
 
 Options:
   -h, --help            Print help and exit
@@ -38,7 +38,6 @@ Options:
   --count=<int>         Specify a record count [default: 10]
   --period=<sec>        Specify a period of seconds to look back [default: 60]
   --date-to=<date>      Specify an ending datetime
-  --volume=<float>      Specify a trading operation volume
 
 Arguments:
   <instrument>          Financial instrument symbol
@@ -78,7 +77,7 @@ def main():
                 date_to=args['--date-to'], csv_path=args['--csv']
             )
         elif args['margin']:
-            _print_margin(symbol=args['<instrument>'], volume=args['--volume'])
+            _print_margin(symbol=args['<instrument>'])
         else:
             pass
     except Exception as e:
@@ -87,17 +86,21 @@ def main():
         Mt5.shutdown()
 
 
-def _print_margin(symbol, volume=None):
-    lot = (float(volume) if volume else Mt5.symbol_info(symbol).volume_min)
+def _print_margin(symbol):
+    volume_min = Mt5.symbol_info(symbol).volume_min
     symbol_info_tick = Mt5.symbol_info_tick(symbol)
     pprint({
-        'account_currency': Mt5.account_info().currency, 'volume': lot,
-        'ask': Mt5.order_calc_margin(
-            Mt5.ORDER_TYPE_BUY, symbol, lot, symbol_info_tick.ask
-        ),
-        'bid': Mt5.order_calc_margin(
-            Mt5.ORDER_TYPE_SELL, symbol, lot, symbol_info_tick.bid
-        )
+        'symbol': symbol,
+        'account_currency': Mt5.account_info().currency,
+        'volume': volume_min,
+        'margin': {
+            'ask': Mt5.order_calc_margin(
+                Mt5.ORDER_TYPE_BUY, symbol, volume_min, symbol_info_tick.ask
+            ),
+            'bid': Mt5.order_calc_margin(
+                Mt5.ORDER_TYPE_SELL, symbol, volume_min, symbol_info_tick.bid
+            )
+        }
     })
 
 
@@ -158,7 +161,7 @@ def _print_symbol_info(symbol, indent=4):
     if not selected_symbol:
         raise RuntimeError(f'Failed to select: {symbol}')
     else:
-        pprint(Mt5.symbol_info(symbol)._asdict())
+        pprint({'symbol': symbol, 'info': Mt5.symbol_info(symbol)._asdict()})
 
 
 def _print_mt5_info():
