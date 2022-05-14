@@ -21,6 +21,9 @@ Usage:
     [--mt5-password=<str>] [--mt5-server=<str>]
   mteor order [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>]
+  mteor deal [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    [--mt5-password=<str>] [--mt5-server=<str>] [--period=<sec>]
+    [--date-to=<date>]
 
 Commands:
     mt5                 Print MT5 versions, status, and settings
@@ -30,6 +33,7 @@ Commands:
     margin              Print minimum margins to perform trading operations
     position            Print open positions
     order               Print active orders
+    deal                Print deals from trading history
 
 Options:
   -h, --help            Print help and exit
@@ -66,8 +70,8 @@ def main():
     _set_log_config(debug=args['--debug'], info=args['--info'])
     logger = logging.getLogger(__name__)
     logger.debug(f'args:{os.linesep}{args}')
-    _initialize_mt5(args=args)
     try:
+        _initialize_mt5(args=args)
         if args['mt5']:
             _print_mt5_info()
         elif args['symbol']:
@@ -86,12 +90,28 @@ def main():
             _print_margin(symbol=args['<instrument>'])
         elif args['position']:
             _print_position()
+        elif args['deal']:
+            _print_deal(period=args['--period'], date_to=args['--date-to'])
         else:
             pass
     except Exception as e:
+        logger.error('the last error of MetaTrader5:', Mt5.last_error())
         raise e
     finally:
         Mt5.shutdown()
+
+
+def _print_deal(period, date_to=None, group=None):
+    end_date = (
+        pd.to_datetime(date_to) if date_to
+        else (datetime.now() + timedelta(seconds=1))
+    )
+    pprint([
+        p._asdict() for p in Mt5.history_deals_get(
+            (end_date - timedelta(seconds=float(period))), end_date,
+            **({'group': group} if group else dict())
+        )
+    ])
 
 
 def _print_order():
@@ -214,10 +234,7 @@ def _initialize_mt5(args):
         )
     }
     if not Mt5.initialize(**initialize_kwargs):
-        raise RuntimeError(
-            'MetaTrader5.initialize() failed, '
-            + 'error code = {}'.format(Mt5.last_error())
-        )
+        raise RuntimeError('MetaTrader5.initialize() failed.')
 
 
 def _set_log_config(debug=None, info=None):
