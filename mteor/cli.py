@@ -19,6 +19,8 @@ Usage:
     [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
   mteor position [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>]
+  mteor order [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    [--mt5-password=<str>] [--mt5-server=<str>]
 
 Commands:
     mt5                 Print MT5 versions, status, and settings
@@ -27,6 +29,7 @@ Commands:
     tick                Print ticks of a financial instrument
     margin              Print minimum margins to perform trading operations
     position            Print open positions
+    order               Print active orders
 
 Options:
   -h, --help            Print help and exit
@@ -89,6 +92,10 @@ def main():
         raise e
     finally:
         Mt5.shutdown()
+
+
+def _print_order():
+    pprint([p._asdict() for p in Mt5.orders_get()])
 
 
 def _print_position():
