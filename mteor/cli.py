@@ -24,6 +24,8 @@ Usage:
   mteor deal [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
     [--mt5-password=<str>] [--mt5-server=<str>] [--hours=<floatt>]
     [--date-to=<date>]
+  mteor close [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
 
 Commands:
     mt5                 Print MT5 versions, status, and settings
@@ -34,6 +36,7 @@ Commands:
     position            Print open positions
     order               Print active orders
     deal                Print deals from trading history
+    close               Close open positions
 
 Options:
   -h, --help            Print help and exit
@@ -93,6 +96,8 @@ def main():
             _print_position()
         elif args['deal']:
             _print_deal(hours=args['--hours'], date_to=args['--date-to'])
+        elif args['close']:
+            _close_position(symbol=args['<instrument>'])
         else:
             pass
     except Exception as e:
@@ -100,6 +105,36 @@ def main():
         raise e
     finally:
         Mt5.shutdown()
+
+
+def _close_position(symbol):
+    logger = logging.getLogger(__name__)
+    for p in Mt5.positions_get(symbol=symbol):
+        request = {
+            'action': Mt5.TRADE_ACTION_DEAL,
+            'symbol': symbol,
+            'volume': p.volume,
+            'type': Mt5.ORDER_TYPE_CLOSE_BY,
+            'type_filling': Mt5.ORDER_FILLING_FOK,
+            'type_time': Mt5.ORDER_TIME_GTC,
+            'position': p.identifier
+        }
+        order_check_result = Mt5.order_check(request)
+        logger.info(
+            'order_check_result:' + os.linesep
+            + pformat({
+                k: (v._asdict() if k == 'request' else v)
+                for k, v in order_check_result._asdict().items()
+            })
+        )
+        order_send_result = Mt5.order_send(request)
+        logger.info(
+            'order_send_result:' + os.linesep
+            + pformat({
+                k: (v._asdict() if k == 'request' else v)
+                for k, v in order_send_result._asdict().items()
+            })
+        )
 
 
 def _print_deal(hours, date_to=None, group=None):
