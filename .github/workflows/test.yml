@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 jobs:
   test_installation:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -19,8 +19,11 @@ jobs:
           python-version: '3.x'
       - name: Install mteor
         run: |
-          pip install -U \
-            autopep8 flake8 flake8-bugbear flake8-isort pep8-naming
+          pip install -U autopep8 flake8 flake8-bugbear flake8-isort pep8-naming .
       - name: Validate the codes using flake8
         run: |
-          find mteor -type f -name '*.py' | xargs flake8
+          Get-ChildItem mteor -Recurse -Filter *.py | %{ flake8 $_.FullName }
+      - name: Test commands
+        run: |
+          mteor --version
+          mteor --help
