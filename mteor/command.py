@@ -11,75 +11,100 @@ import pandas as pd
 
 def close_positions(symbol, dry_run=False):
     logger = logging.getLogger(__name__)
-    for p in Mt5.positions_get(symbol=symbol):
-        request = {
-            'action': Mt5.TRADE_ACTION_DEAL,
-            'symbol': symbol,
-            'volume': p.volume,
-            'type': Mt5.ORDER_TYPE_CLOSE_BY,
-            'type_filling': Mt5.ORDER_FILLING_FOK,
-            'type_time': Mt5.ORDER_TIME_GTC,
-            'position': p.identifier
-        }
-        order_check_result = Mt5.order_check(request)
-        logger.info(
-            'order_check_result:' + os.linesep
-            + pformat({
-                k: (v._asdict() if k == 'request' else v)
-                for k, v in order_check_result._asdict().items()
-            })
-        )
-        if dry_run:
-            order_send_result = Mt5.order_send(request)
+    logger.info(f'symbol: {symbol}, dry_run: {dry_run}')
+    positions = Mt5.positions_get(symbol=symbol)
+    logger.debug(f'positions: {positions}')
+    if not positions:
+        logger.info('No position for {symbol}.')
+    else:
+        for p in positions:
+            request = {
+                'action': Mt5.TRADE_ACTION_DEAL,
+                'symbol': symbol,
+                'volume': p.volume,
+                'type': Mt5.ORDER_TYPE_CLOSE_BY,
+                'type_filling': Mt5.ORDER_FILLING_FOK,
+                'type_time': Mt5.ORDER_TIME_GTC,
+                'position': p.identifier
+            }
+            order_check_result = Mt5.order_check(request)
             logger.info(
-                'order_send_result:' + os.linesep
+                'order_check_result:' + os.linesep
                 + pformat({
                     k: (v._asdict() if k == 'request' else v)
-                    for k, v in order_send_result._asdict().items()
+                    for k, v in order_check_result._asdict().items()
                 })
             )
+            if dry_run:
+                order_send_result = Mt5.order_send(request)
+                logger.info(
+                    'order_send_result:' + os.linesep
+                    + pformat({
+                        k: (v._asdict() if k == 'request' else v)
+                        for k, v in order_send_result._asdict().items()
+                    })
+                )
 
 
 def print_deals(hours, date_to=None, group=None):
+    logger = logging.getLogger(__name__)
+    logger.info(f'hours: {hours}, date_to: {date_to}, group: {group}')
     end_date = (
         pd.to_datetime(date_to) if date_to
         else (datetime.now() + timedelta(seconds=1))
     )
-    pprint([
-        p._asdict() for p in Mt5.history_deals_get(
-            (end_date - timedelta(hours=float(hours))), end_date,
-            **({'group': group} if group else dict())
-        )
-    ])
+    logger.info(f'end_date: {end_date}')
+    deals = Mt5.history_deals_get(
+        (end_date - timedelta(hours=float(hours))), end_date,
+        **({'group': group} if group else dict())
+    )
+    logger.debug(f'deals: {deals}')
+    pprint([d._asdict() for d in deals])
 
 
 def print_orders():
-    pprint([p._asdict() for p in Mt5.orders_get()])
+    logger = logging.getLogger(__name__)
+    orders = Mt5.orders_get()
+    logger.debug(f'orders: {orders}')
+    pprint([o._asdict() for o in orders])
 
 
 def print_positions():
-    pprint([p._asdict() for p in Mt5.positions_get()])
+    logger = logging.getLogger(__name__)
+    positions = Mt5.positions_get()
+    logger.debug(f'positions: {positions}')
+    pprint([p._asdict() for p in positions])
 
 
 def print_margins(symbol):
+    logger = logging.getLogger(__name__)
+    logger.info(f'symbol: {symbol}')
+    account_currency = Mt5.account_info().currency
+    logger.info(f'account_currency: {account_currency}')
     volume_min = Mt5.symbol_info(symbol).volume_min
+    logger.info(f'volume_min: {volume_min}')
     symbol_info_tick = Mt5.symbol_info_tick(symbol)
+    logger.debug(f'symbol_info_tick: {symbol_info_tick}')
+    ask_margin = Mt5.order_calc_margin(
+        Mt5.ORDER_TYPE_BUY, symbol, volume_min, symbol_info_tick.ask
+    )
+    logger.info(f'ask_margin: {ask_margin}')
+    bid_margin = Mt5.order_calc_margin(
+        Mt5.ORDER_TYPE_SELL, symbol, volume_min, symbol_info_tick.bid
+    )
+    logger.info(f'bid_margin: {bid_margin}')
     pprint({
-        'symbol': symbol,
-        'account_currency': Mt5.account_info().currency,
-        'volume': volume_min,
-        'margin': {
-            'ask': Mt5.order_calc_margin(
-                Mt5.ORDER_TYPE_BUY, symbol, volume_min, symbol_info_tick.ask
-            ),
-            'bid': Mt5.order_calc_margin(
-                Mt5.ORDER_TYPE_SELL, symbol, volume_min, symbol_info_tick.bid
-            )
-        }
+        'symbol': symbol, 'account_currency': account_currency,
+        'volume': volume_min, 'margin': {'ask': ask_margin, 'bid': bid_margin}
     })
 
 
 def print_ticks(symbol, seconds, date_to=None, csv_path=None):
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f'symbol: {symbol}, seconds: {seconds}, date_to: {date_to}'
+        + f', csv_path: {csv_path}'
+    )
     _print_df(
         _fetch_df_tick(symbol=symbol, seconds=seconds, date_to=date_to),
         csv_path=csv_path
@@ -87,30 +112,43 @@ def print_ticks(symbol, seconds, date_to=None, csv_path=None):
 
 
 def _fetch_df_tick(symbol, seconds, date_to=None):
+    logger = logging.getLogger(__name__)
     end_date = (
         pd.to_datetime(date_to) if date_to
         else (datetime.now() + timedelta(seconds=1))
     )
-    return pd.DataFrame(
-        Mt5.copy_ticks_range(
-            symbol, (end_date - timedelta(seconds=float(seconds))), end_date,
-            Mt5.COPY_TICKS_ALL
-        )
-    ).assign(
+    logger.info(f'end_date: {end_date}')
+    start_date = end_date - timedelta(seconds=float(seconds))
+    logger.info(f'start_date: {start_date}')
+    ticks = Mt5.copy_ticks_range(
+        symbol, start_date, end_date, Mt5.COPY_TICKS_ALL
+    )
+    logger.debug(f'ticks: {ticks}')
+    return pd.DataFrame(ticks).assign(
         time=lambda d: pd.to_datetime(d['time'], unit='s')
     ).set_index('time')
 
 
 def _print_df(df, csv_path=None, display_max_columns=500, display_width=1500):
+    logger = logging.getLogger(__name__)
+    logger.debug(f'df.shape: {df.shape}')
+    logger.debug(f'df.dtypes: {df.dtypes}')
+    logger.debug(f'df: {df}')
     pd.set_option('display.max_columns', display_max_columns)
     pd.set_option('display.width', display_width)
     pd.set_option('display.max_rows', df.shape[0])
     print(df.reset_index().to_string(index=False))
     if csv_path:
+        logger.info(f'Write CSV data: {csv_path}')
         df.to_csv(csv_path)
 
 
 def print_rates(symbol, granularity, count, start_pos=0, csv_path=None):
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f'symbol: {symbol}, granularity: {granularity}, count: {count}'
+        + f', start_pos: {start_pos}, csv_path: {csv_path}'
+    )
     _print_df(
         _fetch_df_rate(
             symbol=symbol, granularity=granularity, count=count,
@@ -121,36 +159,51 @@ def print_rates(symbol, granularity, count, start_pos=0, csv_path=None):
 
 
 def _fetch_df_rate(symbol, granularity, count, start_pos=0):
-    return pd.DataFrame(
-        Mt5.copy_rates_from_pos(
-            symbol, getattr(Mt5, f'TIMEFRAME_{granularity}'), start_pos,
-            int(count)
-        )
-    ).assign(
+    logger = logging.getLogger(__name__)
+    timeframe = getattr(Mt5, f'TIMEFRAME_{granularity}')
+    logger.info(f'Mt5.TIMEFRAME_{granularity}: {timeframe}')
+    rates = Mt5.copy_rates_from_pos(symbol, timeframe, start_pos, int(count))
+    logger.debug(f'rates: {rates}')
+    return pd.DataFrame(rates).assign(
         time=lambda d: pd.to_datetime(d['time'], unit='s')
     ).set_index('time')
 
 
 def print_symbol_info(symbol, indent=4):
+    logger = logging.getLogger(__name__)
+    logger.info(f'symbol: {symbol}, indent: {indent}')
     selected_symbol = Mt5.symbol_select(symbol, True)
+    logger.debug(f'selected_symbol: {selected_symbol}')
     if not selected_symbol:
         raise RuntimeError(f'Failed to select: {symbol}')
     else:
-        pprint({'symbol': symbol, 'info': Mt5.symbol_info(symbol)._asdict()})
+        symbol_info = Mt5.symbol_info(symbol)
+        logger.debug(f'symbol_info: {symbol_info}')
+        pprint({'symbol': symbol, 'info': symbol_info._asdict()})
 
 
 def print_mt5_info():
-    print(f'MetaTrader5 package author:\t{Mt5.__author__}')
-    print(f'MetaTrader5 package version:\t{Mt5.__version__}')
-    print('Terminal version:\t{}'.format(Mt5.version()))
+    logger = logging.getLogger(__name__)
+    logger.info(f'Mt5.__version__: {Mt5.__version__}')
+    logger.info(f'Mt5.__author__: {Mt5.__author__}')
+    terminal_version = Mt5.version()
+    logger.debug(f'terminal_version: {terminal_version}')
     print(
-        'Terminal status and settings:' + os.linesep
-        + pformat(Mt5.terminal_info()._asdict())
+        'Terminal version: {0}, Build: {1}, Build release date: {2}'.format(
+            *terminal_version
+        )
     )
+    terminal_info = Mt5.terminal_info()
+    logger.debug(f'terminal_info: {terminal_info}')
     print(
-        'Trading account info:' + os.linesep
-        + pformat(Mt5.account_info()._asdict())
+        f'Terminal status and settings:{os.linesep}'
+        + pformat(terminal_info._asdict())
     )
-    print('Number of financial instruments:\t{}'.format(Mt5.symbols_total()))
-    print('Number of active orders:\t{}'.format(Mt5.orders_total()))
-    print('Number of open positions:\t{}'.format(Mt5.positions_total()))
+    account_info = Mt5.account_info()
+    logger.debug(f'account_info: {account_info}')
+    print(
+        f'Trading account info:{os.linesep}' + pformat(account_info._asdict())
+    )
+    print('Number of financial instruments: {}'.format(Mt5.symbols_total()))
+    print('Number of active orders: {}'.format(Mt5.orders_total()))
+    print('Number of open positions: {}'.format(Mt5.positions_total()))

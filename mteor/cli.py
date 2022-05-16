@@ -28,7 +28,7 @@ Usage:
     [--mt5-password=<str>] [--mt5-server=<str>] [--dry-run] <instrument>
 
 Commands:
-    mt5                   Print MT5 versions, status, and settings
+    mt5                   Print MetaTrader 5 versions, status, and settings
     symbol                Print information about a financial instrument
     rate                  Print rates of a financial instrument
     tick                  Print ticks of a financial instrument
