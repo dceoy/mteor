@@ -1,12 +1,12 @@
 ---
 name: Test
 on:
-# push:
-#   branches:
-#     - main
-# pull_request:
-#   branches:
-#     - main
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 jobs:
   test_installation:
@@ -20,11 +20,7 @@ jobs:
       - name: Install mteor
         run: |
           pip install -U \
-            autopep8 flake8 flake8-bugbear flake8-isort pep8-naming .
+            autopep8 flake8 flake8-bugbear flake8-isort pep8-naming
       - name: Validate the codes using flake8
         run: |
-          find . -type f -name '*.py' | xargs flake8
-      - name: Test commands
-        run: |
-          mteor --version
-          mteor --help
+          find mteor -type f -name '*.py' | xargs flake8

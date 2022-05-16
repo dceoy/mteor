@@ -27,15 +27,17 @@ def close_positions(symbol, dry_run=False):
                 'type_time': Mt5.ORDER_TIME_GTC,
                 'position': p.identifier
             }
-            order_check_result = Mt5.order_check(request)
-            logger.info(
-                'order_check_result:' + os.linesep
-                + pformat({
-                    k: (v._asdict() if k == 'request' else v)
-                    for k, v in order_check_result._asdict().items()
-                })
-            )
+            logger.debug(f'request: {request}')
             if dry_run:
+                order_check_result = Mt5.order_check(request)
+                logger.info(
+                    'order_check_result:' + os.linesep
+                    + pformat({
+                        k: (v._asdict() if k == 'request' else v)
+                        for k, v in order_check_result._asdict().items()
+                    })
+                )
+            else:
                 order_send_result = Mt5.order_send(request)
                 logger.info(
                     'order_send_result:' + os.linesep
@@ -189,9 +191,15 @@ def print_mt5_info():
     terminal_version = Mt5.version()
     logger.debug(f'terminal_version: {terminal_version}')
     print(
-        'Terminal version: {0}, Build: {1}, Build release date: {2}'.format(
-            *terminal_version
-        )
+        os.linesep.join([
+            f'{k}:\t{v}' for k, v in zip(
+                [
+                    'MetaTrader 5 terminal version', 'Build',
+                    'Build release date'
+                ],
+                terminal_version
+            )
+        ])
     )
     terminal_info = Mt5.terminal_info()
     logger.debug(f'terminal_info: {terminal_info}')
@@ -204,6 +212,6 @@ def print_mt5_info():
     print(
         f'Trading account info:{os.linesep}' + pformat(account_info._asdict())
     )
-    print('Number of financial instruments: {}'.format(Mt5.symbols_total()))
-    print('Number of active orders: {}'.format(Mt5.orders_total()))
-    print('Number of open positions: {}'.format(Mt5.positions_total()))
+    print('Number of financial instruments:\t{}'.format(Mt5.symbols_total()))
+    print('Number of active orders:\t{}'.format(Mt5.orders_total()))
+    print('Number of open positions:\t{}'.format(Mt5.positions_total()))
