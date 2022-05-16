@@ -106,7 +106,7 @@ def main():
         else:
             pass
     except Exception as e:
-        logger.error('the last error of MetaTrader5:', Mt5.last_error())
+        logger.error('Mt5.last_error(): {}'.format(Mt5.last_error()))
         raise e
     finally:
         Mt5.shutdown()

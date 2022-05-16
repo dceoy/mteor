@@ -17,35 +17,57 @@ def close_positions(symbol, dry_run=False):
     if not positions:
         logger.info('No position for {symbol}.')
     else:
+        symbol_info_tick = Mt5.symbol_info_tick(symbol)
+        logger.debug(f'symbol_info_tick: {symbol_info_tick}')
         for p in positions:
-            request = {
-                'action': Mt5.TRADE_ACTION_DEAL,
-                'symbol': symbol,
-                'volume': p.volume,
-                'type': Mt5.ORDER_TYPE_CLOSE_BY,
-                'type_filling': Mt5.ORDER_FILLING_FOK,
-                'type_time': Mt5.ORDER_TIME_GTC,
-                'position': p.identifier
-            }
-            logger.debug(f'request: {request}')
-            if dry_run:
-                order_check_result = Mt5.order_check(request)
-                logger.info(
-                    'order_check_result:' + os.linesep
-                    + pformat({
-                        k: (v._asdict() if k == 'request' else v)
-                        for k, v in order_check_result._asdict().items()
-                    })
-                )
-            else:
-                order_send_result = Mt5.order_send(request)
-                logger.info(
-                    'order_send_result:' + os.linesep
-                    + pformat({
-                        k: (v._asdict() if k == 'request' else v)
-                        for k, v in order_send_result._asdict().items()
-                    })
-                )
+            _send_or_check_order(
+                request={
+                    'action': Mt5.TRADE_ACTION_DEAL,
+                    'symbol': symbol,
+                    'volume': p.volume,
+                    'type': (
+                        Mt5.ORDER_TYPE_SELL if p.type == Mt5.POSITION_TYPE_BUY
+                        else Mt5.ORDER_TYPE_BUY
+                    ),
+                    'type_filling': Mt5.ORDER_FILLING_FOK,
+                    'type_time': Mt5.ORDER_TIME_GTC,
+                    'position': p.ticket
+                },
+                only_check=dry_run
+            )
+
+
+def _send_or_check_order(request, only_check=False):
+    logger = logging.getLogger(__name__)
+    logger.debug(f'request: {request}')
+    if only_check:
+        order_check_result = Mt5.order_check(request)
+        response = {
+            k: (v._asdict() if k == 'request' else v)
+            for k, v in order_check_result._asdict().items()
+        }
+        if order_check_result.retcode == 0:
+            logger.info(f'order_check_result:{os.linesep}' + pformat(response))
+        else:
+            logger.error(
+                f'order_check_result:{os.linesep}' + pformat(response)
+            )
+            raise RuntimeError(
+                f'Mt5.order_check() failed. <= `{order_check_result.comment}`'
+            )
+    else:
+        order_send_result = Mt5.order_send(request)
+        response = {
+            k: (v._asdict() if k == 'request' else v)
+            for k, v in order_send_result._asdict().items()
+        }
+        if order_send_result.retcode == Mt5.TRADE_RETCODE_DONE:
+            logger.info(f'order_send_result:{os.linesep}' + pformat(response))
+        else:
+            logger.error(f'order_send_result:{os.linesep}' + pformat(response))
+            raise RuntimeError(
+                f'Mt5.order_send() failed. <= `{order_send_result.comment}`'
+            )
 
 
 def print_deals(hours, date_to=None, group=None):
