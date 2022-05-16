@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
+import json
 import logging
 import os
 from datetime import datetime, timedelta
-from pprint import pformat, pprint
+from pprint import pformat
 
 import MetaTrader5 as Mt5
 import pandas as pd
@@ -15,10 +16,8 @@ def close_positions(symbol, dry_run=False):
     positions = Mt5.positions_get(symbol=symbol)
     logger.debug(f'positions: {positions}')
     if not positions:
-        logger.info('No position for {symbol}.')
+        logger.info(f'No position for {symbol}.')
     else:
-        symbol_info_tick = Mt5.symbol_info_tick(symbol)
-        logger.debug(f'symbol_info_tick: {symbol_info_tick}')
         for p in positions:
             _send_or_check_order(
                 request={
@@ -40,34 +39,20 @@ def close_positions(symbol, dry_run=False):
 def _send_or_check_order(request, only_check=False):
     logger = logging.getLogger(__name__)
     logger.debug(f'request: {request}')
-    if only_check:
-        order_check_result = Mt5.order_check(request)
-        response = {
-            k: (v._asdict() if k == 'request' else v)
-            for k, v in order_check_result._asdict().items()
-        }
-        if order_check_result.retcode == 0:
-            logger.info(f'order_check_result:{os.linesep}' + pformat(response))
-        else:
-            logger.error(
-                f'order_check_result:{os.linesep}' + pformat(response)
-            )
-            raise RuntimeError(
-                f'Mt5.order_check() failed. <= `{order_check_result.comment}`'
-            )
+    order_func = 'order_{}'.format('check' if only_check else 'send')
+    result = getattr(Mt5, order_func)(request)
+    logger.debug(f'result: {result}')
+    response = {
+        k: (v._asdict() if k == 'request' else v)
+        for k, v in result._asdict().items()
+    }
+    _print_json(response)
+    if (((not only_check) and result.retcode == Mt5.TRADE_RETCODE_DONE)
+            or (only_check and result.retcode == 0)):
+        logger.info(f'response:{os.linesep}' + pformat(response))
     else:
-        order_send_result = Mt5.order_send(request)
-        response = {
-            k: (v._asdict() if k == 'request' else v)
-            for k, v in order_send_result._asdict().items()
-        }
-        if order_send_result.retcode == Mt5.TRADE_RETCODE_DONE:
-            logger.info(f'order_send_result:{os.linesep}' + pformat(response))
-        else:
-            logger.error(f'order_send_result:{os.linesep}' + pformat(response))
-            raise RuntimeError(
-                f'Mt5.order_send() failed. <= `{order_send_result.comment}`'
-            )
+        logger.error(f'response:{os.linesep}' + pformat(response))
+        raise RuntimeError(f'Mt5.{order_func}() failed. <= `{result.comment}`')
 
 
 def print_deals(hours, date_to=None, group=None):
@@ -83,21 +68,21 @@ def print_deals(hours, date_to=None, group=None):
         **({'group': group} if group else dict())
     )
     logger.debug(f'deals: {deals}')
-    pprint([d._asdict() for d in deals])
+    _print_json([d._asdict() for d in deals])
 
 
 def print_orders():
     logger = logging.getLogger(__name__)
     orders = Mt5.orders_get()
     logger.debug(f'orders: {orders}')
-    pprint([o._asdict() for o in orders])
+    _print_json([o._asdict() for o in orders])
 
 
 def print_positions():
     logger = logging.getLogger(__name__)
     positions = Mt5.positions_get()
     logger.debug(f'positions: {positions}')
-    pprint([p._asdict() for p in positions])
+    _print_json([p._asdict() for p in positions])
 
 
 def print_margins(symbol):
@@ -117,7 +102,7 @@ def print_margins(symbol):
         Mt5.ORDER_TYPE_SELL, symbol, volume_min, symbol_info_tick.bid
     )
     logger.info(f'bid_margin: {bid_margin}')
-    pprint({
+    _print_json({
         'symbol': symbol, 'account_currency': account_currency,
         'volume': volume_min, 'margin': {'ask': ask_margin, 'bid': bid_margin}
     })
@@ -193,9 +178,13 @@ def _fetch_df_rate(symbol, granularity, count, start_pos=0):
     ).set_index('time')
 
 
-def print_symbol_info(symbol, indent=4):
+def _print_json(data, indent=2):
+    print(json.dumps(data, indent=indent))
+
+
+def print_symbol_info(symbol):
     logger = logging.getLogger(__name__)
-    logger.info(f'symbol: {symbol}, indent: {indent}')
+    logger.info(f'symbol: {symbol}')
     selected_symbol = Mt5.symbol_select(symbol, True)
     logger.debug(f'selected_symbol: {selected_symbol}')
     if not selected_symbol:
@@ -203,7 +192,7 @@ def print_symbol_info(symbol, indent=4):
     else:
         symbol_info = Mt5.symbol_info(symbol)
         logger.debug(f'symbol_info: {symbol_info}')
-        pprint({'symbol': symbol, 'info': symbol_info._asdict()})
+        _print_json({'symbol': symbol, 'info': symbol_info._asdict()})
 
 
 def print_mt5_info():
@@ -214,7 +203,7 @@ def print_mt5_info():
     logger.debug(f'terminal_version: {terminal_version}')
     print(
         os.linesep.join([
-            f'{k}:\t{v}' for k, v in zip(
+            f'{k}: {v}' for k, v in zip(
                 [
                     'MetaTrader 5 terminal version', 'Build',
                     'Build release date'
@@ -226,14 +215,15 @@ def print_mt5_info():
     terminal_info = Mt5.terminal_info()
     logger.debug(f'terminal_info: {terminal_info}')
     print(
-        f'Terminal status and settings:{os.linesep}'
-        + pformat(terminal_info._asdict())
+        f'Terminal status and settings:{os.linesep}' + os.linesep.join([
+            f'  {k}: {v}' for k, v in terminal_info._asdict().items()
+        ])
     )
     account_info = Mt5.account_info()
     logger.debug(f'account_info: {account_info}')
     print(
-        f'Trading account info:{os.linesep}' + pformat(account_info._asdict())
+        f'Trading account info:{os.linesep}' + os.linesep.join([
+            f'  {k}: {v}' for k, v in account_info._asdict().items()
+        ])
     )
-    print('Number of financial instruments:\t{}'.format(Mt5.symbols_total()))
-    print('Number of active orders:\t{}'.format(Mt5.orders_total()))
-    print('Number of open positions:\t{}'.format(Mt5.positions_total()))
+    print('Number of financial instruments: {}'.format(Mt5.symbols_total()))
