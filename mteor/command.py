@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import json
 import logging
 import os
 from datetime import datetime, timedelta
@@ -8,6 +7,8 @@ from pprint import pformat
 
 import MetaTrader5 as Mt5
 import pandas as pd
+
+from .util import Mt5ResponseError, print_df, print_json
 
 
 def close_positions(symbol, dry_run=False):
@@ -46,13 +47,15 @@ def _send_or_check_order(request, only_check=False):
         k: (v._asdict() if k == 'request' else v)
         for k, v in result._asdict().items()
     }
-    _print_json(response)
+    print_json(response)
     if (((not only_check) and result.retcode == Mt5.TRADE_RETCODE_DONE)
             or (only_check and result.retcode == 0)):
         logger.info(f'response:{os.linesep}' + pformat(response))
     else:
         logger.error(f'response:{os.linesep}' + pformat(response))
-        raise RuntimeError(f'Mt5.{order_func}() failed. <= `{result.comment}`')
+        raise Mt5ResponseError(
+            f'Mt5.{order_func}() failed. <= `{result.comment}`'
+        )
 
 
 def print_deals(hours, date_to=None, group=None):
@@ -68,21 +71,21 @@ def print_deals(hours, date_to=None, group=None):
         **({'group': group} if group else dict())
     )
     logger.debug(f'deals: {deals}')
-    _print_json([d._asdict() for d in deals])
+    print_json([d._asdict() for d in deals])
 
 
 def print_orders():
     logger = logging.getLogger(__name__)
     orders = Mt5.orders_get()
     logger.debug(f'orders: {orders}')
-    _print_json([o._asdict() for o in orders])
+    print_json([o._asdict() for o in orders])
 
 
 def print_positions():
     logger = logging.getLogger(__name__)
     positions = Mt5.positions_get()
     logger.debug(f'positions: {positions}')
-    _print_json([p._asdict() for p in positions])
+    print_json([p._asdict() for p in positions])
 
 
 def print_margins(symbol):
@@ -102,7 +105,7 @@ def print_margins(symbol):
         Mt5.ORDER_TYPE_SELL, symbol, volume_min, symbol_info_tick.bid
     )
     logger.info(f'bid_margin: {bid_margin}')
-    _print_json({
+    print_json({
         'symbol': symbol, 'account_currency': account_currency,
         'volume': volume_min, 'margin': {'ask': ask_margin, 'bid': bid_margin}
     })
@@ -114,7 +117,7 @@ def print_ticks(symbol, seconds, date_to=None, csv_path=None):
         f'symbol: {symbol}, seconds: {seconds}, date_to: {date_to}'
         + f', csv_path: {csv_path}'
     )
-    _print_df(
+    print_df(
         _fetch_df_tick(symbol=symbol, seconds=seconds, date_to=date_to),
         csv_path=csv_path
     )
@@ -138,27 +141,13 @@ def _fetch_df_tick(symbol, seconds, date_to=None):
     ).set_index('time')
 
 
-def _print_df(df, csv_path=None, display_max_columns=500, display_width=1500):
-    logger = logging.getLogger(__name__)
-    logger.debug(f'df.shape: {df.shape}')
-    logger.debug(f'df.dtypes: {df.dtypes}')
-    logger.debug(f'df: {df}')
-    pd.set_option('display.max_columns', display_max_columns)
-    pd.set_option('display.width', display_width)
-    pd.set_option('display.max_rows', df.shape[0])
-    print(df.reset_index().to_string(index=False))
-    if csv_path:
-        logger.info(f'Write CSV data: {csv_path}')
-        df.to_csv(csv_path)
-
-
 def print_rates(symbol, granularity, count, start_pos=0, csv_path=None):
     logger = logging.getLogger(__name__)
     logger.info(
         f'symbol: {symbol}, granularity: {granularity}, count: {count}'
         + f', start_pos: {start_pos}, csv_path: {csv_path}'
     )
-    _print_df(
+    print_df(
         _fetch_df_rate(
             symbol=symbol, granularity=granularity, count=count,
             start_pos=start_pos
@@ -178,21 +167,17 @@ def _fetch_df_rate(symbol, granularity, count, start_pos=0):
     ).set_index('time')
 
 
-def _print_json(data, indent=2):
-    print(json.dumps(data, indent=indent))
-
-
 def print_symbol_info(symbol):
     logger = logging.getLogger(__name__)
     logger.info(f'symbol: {symbol}')
     selected_symbol = Mt5.symbol_select(symbol, True)
     logger.debug(f'selected_symbol: {selected_symbol}')
     if not selected_symbol:
-        raise RuntimeError(f'Failed to select: {symbol}')
+        raise Mt5ResponseError(f'Failed to select: {symbol}')
     else:
         symbol_info = Mt5.symbol_info(symbol)
         logger.debug(f'symbol_info: {symbol_info}')
-        _print_json({'symbol': symbol, 'info': symbol_info._asdict()})
+        print_json({'symbol': symbol, 'info': symbol_info._asdict()})
 
 
 def print_mt5_info():

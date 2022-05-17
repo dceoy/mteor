@@ -68,11 +68,12 @@ from . import __version__
 from .command import (close_positions, print_deals, print_margins,
                       print_mt5_info, print_orders, print_positions,
                       print_rates, print_symbol_info, print_ticks)
+from .util import Mt5ResponseError, set_log_config
 
 
 def main():
     args = docopt(__doc__, version=f'mteor {__version__}')
-    _set_log_config(debug=args['--debug'], info=args['--info'])
+    set_log_config(debug=args['--debug'], info=args['--info'])
     logger = logging.getLogger(__name__)
     logger.debug(f'args:{os.linesep}{args}')
     try:
@@ -129,17 +130,4 @@ def _initialize_mt5(args):
         )
     }
     if not Mt5.initialize(**initialize_kwargs):
-        raise RuntimeError('MetaTrader5.initialize() failed.')
-
-
-def _set_log_config(debug=None, info=None):
-    if debug:
-        lv = logging.DEBUG
-    elif info:
-        lv = logging.INFO
-    else:
-        lv = logging.WARNING
-    logging.basicConfig(
-        format='%(asctime)s %(levelname)-8s %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S', level=lv
-    )
+        raise Mt5ResponseError('MetaTrader5.initialize() failed.')
