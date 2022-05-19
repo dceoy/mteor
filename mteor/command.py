@@ -23,13 +23,12 @@ def close_positions(symbol, dry_run=False):
             _send_or_check_order(
                 request={
                     'action': Mt5.TRADE_ACTION_DEAL,
-                    'symbol': symbol,
-                    'volume': p.volume,
+                    'symbol': p.symbol, 'volume': p.volume,
                     'type': (
                         Mt5.ORDER_TYPE_SELL if p.type == Mt5.POSITION_TYPE_BUY
                         else Mt5.ORDER_TYPE_BUY
                     ),
-                    'type_filling': Mt5.ORDER_FILLING_FOK,
+                    'type_filling': Mt5.ORDER_FILLING_RETURN,
                     'type_time': Mt5.ORDER_TIME_GTC,
                     'position': p.ticket
                 },
