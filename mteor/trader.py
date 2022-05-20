@@ -10,6 +10,7 @@ import MetaTrader5 as Mt5
 import numpy as np
 import pandas as pd
 
+from .bet import BettingSystem
 from .util import Mt5ResponseError
 
 
@@ -22,6 +23,7 @@ class Mt5TraderCore(object):
                  quiet=False, dry_run=False):
         self.__logger = logging.getLogger(__name__)
         self.symbol = symbol
+        self.betting_system = BettingSystem(strategy=betting_strategy)
         self.__scanned_history_hours = float(scanned_history_hours)
         self.__scanned_tick_seconds = float(scanned_tick_seconds)
         self.__hv_granularity = hv_granularity
@@ -42,8 +44,10 @@ class Mt5TraderCore(object):
         self.history_deals = list()
         self.df_tick = pd.DataFrame()
         self.df_rate = pd.DataFrame()
-        self.unit_volume = None
         self.unit_margin = None
+        self.unit_volume = None
+        self.avail_margin = None
+        self.avail_volume = None
 
     def _refresh_account_cache(self):
         self.account_info = Mt5.account_info()
@@ -167,23 +171,104 @@ class Mt5TraderCore(object):
                     'position': p.ticket, **kwargs
                 })
 
-    def _place_order(self, volume, buy=True, **kwargs):
+    def _refresh_unit_margin_and_volume(self):
+        unit_lot = ceil(
+            self.account_info.balance * self.__unit_margin_ratio
+            / self.min_margins['ask']
+        )
+        self.unit_margin = self.min_margins['ask'] * unit_lot
+        self.__logger.debug(f'self.unit_margin: {self.unit_margin}')
+        self.unit_volume = self.symbol_info.volume_min * unit_lot
+        self.__logger.debug(f'self.unit_volume: {self.unit_volume}')
+        self.avail_margin = max(
+            (
+                self.account_info.margin_free
+                - self.account_info.balance * self.__preserved_margin_ratio
+            ),
+            0
+        )
+        self.__logger.debug(f'self.avail_margin: {self.avail_margin}')
+        self.avail_volume = (
+            ceil(self.avail_margin / self.min_margins['ask'])
+            * self.symbol_info.volume_min
+        )
+        self.__logger.debug(f'self.avail_volume: {self.avail_volume}')
+
+    def _determine_order_volume(self):
+        bet_volume = self.betting_system.calculate_volume_by_pl(
+            unit_volume=self.unit_volume, history_deals=self.history_deals
+        )
+        self.__logger.debug(f'bet_volume: {bet_volume}')
+        return min(bet_volume, self.avail_volume)
+
+    def _determine_order_limits(self, side):
+        price = getattr(
+            self.symbol_info_tick, {'long': 'ask', 'short': 'bid'}[side]
+        )
+        order_limits = {
+            'sl': (
+                price + (
+                    price * self.__stop_loss_limit_ratio
+                    * {'long': -1, 'short': 1}[side]
+                )
+            ),
+            'tp': (
+                price + (
+                    price * self.__take_profit_limit_ratio
+                    * {'long': 1, 'short': -1}[side]
+                )
+            )
+        }
+        self.__logger.debug(f'order_limits: {order_limits}')
+        return order_limits
+
+    def _place_order(self, volume, side, **kwargs):
         self._send_or_check_order({
             'action': Mt5.TRADE_ACTION_DEAL,
             'symbol': self.symbol, 'volume': volume,
-            'type': (Mt5.ORDER_TYPE_BUY if buy else Mt5.ORDER_TYPE_SELL),
+            'type':
+            {'long': Mt5.ORDER_TYPE_BUY, 'short': Mt5.ORDER_TYPE_SELL}[side],
             'type_filling': Mt5.ORDER_FILLING_FOK,
             'type_time': Mt5.ORDER_TIME_GTC,
             **kwargs
         })
 
-    def _refresh_unit_volume_and_margin(self):
-        unit_size = ceil(
-            self.account_info.balance * self.__unit_margin_ratio
-            / self.min_margins['mid']
-        )
-        self.unit_volume = self.symbol_info.volume_min * unit_size
-        self.unit_margin = self.min_margins['mid'] * unit_size
+    def design_and_place_order(self, act):
+        position_volumes = {
+            'long': sum([
+                p.volume for p in self.positions
+                if p.type == Mt5.POSITION_TYPE_BUY
+            ]),
+            'short': sum([
+                p.volume for p in self.positions
+                if p.type == Mt5.POSITION_TYPE_SELL
+            ])
+        }
+        if position_volumes['long'] > position_volumes['short']:
+            position_side = 'long'
+        elif position_volumes['long'] < position_volumes['short']:
+            position_side = 'short'
+        else:
+            position_side = None
+        if (position_side and act
+                and (act == 'closing' or act != position_side)):
+            self.__logger.info('Close a position: {}'.format(position_side))
+            self._close_positions()
+        if act in ['long', 'short']:
+            order_limits = self._determine_order_limits(side=act)
+            order_volume = self._determine_order_volume()
+            new_volume = (
+                order_volume - position_volumes[act]
+                if position_side and act == position_side else order_volume
+            )
+            if new_volume > 0:
+                self.__logger.info(f'Open an order: {act}')
+                self._place_order(volume=new_volume, side=act, **order_limits)
+            else:
+                self.__logger.info(f'Skip an order: {act}')
+            return new_volume
+        else:
+            return 0
 
     def is_margin_lack(self):
         return (
