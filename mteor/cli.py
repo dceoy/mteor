@@ -65,9 +65,10 @@ import MetaTrader5 as Mt5
 from docopt import docopt
 
 from . import __version__
-from .command import (close_positions, print_deals, print_margins,
-                      print_mt5_info, print_orders, print_positions,
-                      print_rates, print_symbol_info, print_ticks)
+from .info import (print_deals, print_margins, print_mt5_info, print_orders,
+                   print_positions, print_rates, print_symbol_info,
+                   print_ticks)
+from .order import close_positions
 from .util import Mt5ResponseError, set_log_config
 
 
