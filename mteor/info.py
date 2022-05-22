@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import MetaTrader5 as Mt5
 import pandas as pd
 
-from .util import Mt5ResponseError, print_df, print_json
+from .util import print_df, print_json
 
 
 def print_deals(hours, date_to=None, group=None):
@@ -122,14 +122,14 @@ def _fetch_df_rate(symbol, granularity, count, start_pos=0):
 def print_symbol_info(symbol):
     logger = logging.getLogger(__name__)
     logger.info(f'symbol: {symbol}')
-    selected_symbol = Mt5.symbol_select(symbol, True)
-    logger.debug(f'selected_symbol: {selected_symbol}')
-    if not selected_symbol:
-        raise Mt5ResponseError(f'Failed to select: {symbol}')
-    else:
-        symbol_info = Mt5.symbol_info(symbol)
-        logger.debug(f'symbol_info: {symbol_info}')
-        print_json({'symbol': symbol, 'info': symbol_info._asdict()})
+    symbol_info = Mt5.symbol_info(symbol)
+    logger.debug(f'symbol_info: {symbol_info}')
+    symbol_info_tick = Mt5.symbol_info_tick(symbol)
+    logger.debug(f'symbol_info_tick: {symbol_info_tick}')
+    print_json({
+        'symbol': symbol, 'info': symbol_info._asdict(),
+        'tick': symbol_info_tick._asdict()
+    })
 
 
 def print_mt5_info():

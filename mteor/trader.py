@@ -2,6 +2,7 @@
 
 import logging
 import os
+import signal
 from datetime import datetime, timedelta
 from math import ceil
 from pprint import pformat
@@ -11,28 +12,24 @@ import numpy as np
 import pandas as pd
 
 from .bet import BettingSystem
+from .signal import EwmaSignalDetector
 from .util import Mt5ResponseError
 
 
 class Mt5TraderCore(object):
-    def __init__(self, symbol, betting_strategy='constant',
-                 scanned_history_hours=24, scanned_tick_seconds=60,
-                 hv_granularity='M1', hv_count=1000, unit_margin_ratio=0.01,
-                 preserved_margin_ratio=0.01, take_profit_limit_ratio=0.01,
-                 trailing_stop_limit_ratio=0.01, stop_loss_limit_ratio=0.01,
-                 quiet=False, dry_run=False):
+    def __init__(self, symbol, betting_strategy='constant', history_hours=24,
+                 unit_margin_ratio=0.01, preserved_margin_ratio=0.01,
+                 take_profit_limit_ratio=0.01, stop_loss_limit_ratio=0.01,
+                 trailing_stop_limit_ratio=0.01, quiet=False, dry_run=False):
         self.__logger = logging.getLogger(__name__)
         self.symbol = symbol
         self.betting_system = BettingSystem(strategy=betting_strategy)
-        self.__scanned_history_hours = float(scanned_history_hours)
-        self.__scanned_tick_seconds = float(scanned_tick_seconds)
-        self.__hv_granularity = hv_granularity
-        self.__hv_count = int(hv_count)
+        self.__history_hours = float(history_hours)
         self.__unit_margin_ratio = float(unit_margin_ratio)
         self.__preserved_margin_ratio = float(preserved_margin_ratio)
         self.__take_profit_limit_ratio = float(take_profit_limit_ratio)
-        self.__trailing_stop_limit_ratio = float(trailing_stop_limit_ratio)
         self.__stop_loss_limit_ratio = float(stop_loss_limit_ratio)
+        self.__trailing_stop_limit_ratio = float(trailing_stop_limit_ratio)
         self.__quiet = quiet
         self.__dry_run = dry_run
         self.account_info = None
@@ -42,12 +39,22 @@ class Mt5TraderCore(object):
         self.orders = list()
         self.min_margins = dict()
         self.history_deals = list()
-        self.df_tick = pd.DataFrame()
-        self.df_rate = pd.DataFrame()
         self.unit_margin = None
         self.unit_volume = None
         self.avail_margin = None
         self.avail_volume = None
+        self.position_volumes = dict()
+        self.position_side = None
+
+    def refresh_mt5_caches(self):
+        self._refresh_account_cache()
+        self._refresh_symbol_cache()
+        self._refresh_symbol_tick_cache()
+        self._refresh_position_cache()
+        self._refresh_order_cache()
+        self._refresh_margin_cache()
+        self._refresh_history_deal_cache()
+        self._refresh_unit_margin_and_volume()
 
     def _refresh_account_cache(self):
         self.account_info = Mt5.account_info()
@@ -58,17 +65,41 @@ class Mt5TraderCore(object):
     def _refresh_symbol_cache(self):
         self.symbol_info = Mt5.symbol_info(self.symbol)
         self.__logger.debug(f'self.symbol_info: {self.symbol_info}')
+        if not self.symbol_info:
+            raise Mt5ResponseError('Mt5.symbol_info() failed.')
+
+    def _refresh_symbol_tick_cache(self):
         self.symbol_info_tick = Mt5.symbol_info_tick(self.symbol)
         self.__logger.debug(f'self.symbol_info_tick: {self.symbol_info_tick}')
-        for a in ['symbol_info', 'symbol_info_tick']:
-            if not getattr(self, a):
-                raise Mt5ResponseError(f'Mt5.{a}() failed.')
+        if not self.symbol_info_tick:
+            raise Mt5ResponseError('Mt5.symbol_info_tick() failed.')
 
     def _refresh_position_cache(self):
         self.positions = Mt5.positions_get(symbol=self.symbol)
         self.__logger.debug(f'self.positions: {self.positions}')
         if not isinstance(self.positions, tuple):
             raise Mt5ResponseError('Mt5.positions_get() failed.')
+        elif not self.positions:
+            self.position_volumes = {'long': 0, 'short': 0}
+            self.position_side = None
+        else:
+            long_volume = sum([
+                p.volume for p in self.positions
+                if p.type == Mt5.POSITION_TYPE_BUY
+            ])
+            short_volume = sum([
+                p.volume for p in self.positions
+                if p.type == Mt5.POSITION_TYPE_SELL
+            ])
+            self.position_volumes = {
+                'long': long_volume, 'short': short_volume
+            }
+            if long_volume > short_volume:
+                self.position_side = 'long'
+            elif long_volume < short_volume:
+                self.position_side = 'short'
+            else:
+                self.position_side = None
 
     def _refresh_order_cache(self):
         self.orders = Mt5.orders_get(symbol=self.symbol)
@@ -88,88 +119,18 @@ class Mt5TraderCore(object):
         )
         self.__logger.debug(f'min_bid_margin: {min_bid_margin}')
         if all([min_ask_margin, min_bid_margin]):
-            self.min_margins = {
-                'ask': min_ask_margin, 'bid': min_bid_margin,
-                'mid': ((min_ask_margin + min_bid_margin) / 2)
-            }
+            self.min_margins = {'ask': min_ask_margin, 'bid': min_bid_margin}
         else:
             raise Mt5ResponseError('Mt5.order_calc_margin() failed.')
 
     def _refresh_history_deal_cache(self):
         end_date = datetime.now() + timedelta(seconds=1)
         self.history_deals = Mt5.history_deals_get(
-            (end_date - timedelta(hours=self.__scanned_history_hours)),
+            (end_date - timedelta(hours=self.__history_hours)),
             end_date, group=self.symbol
         )
         if not isinstance(self.history_deals, tuple):
             raise Mt5ResponseError('Mt5.history_deals_get() failed.')
-
-    def _fetch_df_tick(self):
-        end_date = datetime.now() + timedelta(seconds=1)
-        start_date = end_date - timedelta(seconds=self.__scanned_tick_seconds)
-        ticks = Mt5.copy_ticks_range(
-            self.symbol, start_date, end_date, Mt5.COPY_TICKS_ALL
-        )
-        self.__logger.debug(f'ticks: {ticks}')
-        if isinstance(ticks, list):
-            self.df_tick = pd.DataFrame(ticks)[[
-                'time_msc', 'bid', 'ask'
-            ]].assign(
-                time_msc=lambda d: pd.to_datetime(d['time_msc'], unit='ms')
-            ).set_index('time_msc')
-        else:
-            raise Mt5ResponseError('Mt5.copy_ticks_range() failed.')
-
-    def _fetch_df_rate(self):
-        rates = Mt5.copy_rates_from_pos(
-            self.symbol, getattr(Mt5, f'TIMEFRAME_{self.__hv_granularity}'), 0,
-            self.__hv_count
-        )
-        self.__logger.debug(f'rates: {rates}')
-        if isinstance(rates, list):
-            self.df_rate = pd.DataFrame(rates).drop(
-                columns='real_volume'
-            ).assign(
-                time=lambda d: pd.to_datetime(d['time'], unit='s')
-            ).set_index('time')
-        else:
-            raise Mt5ResponseError('Mt5.copy_rates_from_pos() failed.')
-
-    def _send_or_check_order(self, request):
-        self.__logger.debug(f'request: {request}')
-        order_func = 'order_{}'.format('check' if self.__dry_run else 'send')
-        result = getattr(Mt5, order_func)(request)
-        self.__logger.debug(f'result: {result}')
-        response = {
-            k: (v._asdict() if k == 'request' else v)
-            for k, v in result._asdict().items()
-        }
-        if (((not self.__dry_run) and result.retcode == Mt5.TRADE_RETCODE_DONE)
-                or (self.__dry_run and result.retcode == 0)):
-            self.__logger.info(f'response:{os.linesep}' + pformat(response))
-        else:
-            self.__logger.error(f'response:{os.linesep}' + pformat(response))
-            raise Mt5ResponseError(
-                f'Mt5.{order_func}() failed. <= `{result.comment}`'
-            )
-
-    def _close_positions(self, **kwargs):
-        if not self.positions:
-            self.__logger.info(f'No position for {self.symbol}.')
-        else:
-            for p in self.positions:
-                self._send_or_check_order({
-                    'action': Mt5.TRADE_ACTION_DEAL,
-                    'symbol': p.symbol, 'volume': p.volume,
-                    'type': (
-                        Mt5.ORDER_TYPE_SELL
-                        if p.type == Mt5.POSITION_TYPE_BUY
-                        else Mt5.ORDER_TYPE_BUY
-                    ),
-                    'type_filling': Mt5.ORDER_FILLING_RETURN,
-                    'type_time': Mt5.ORDER_TIME_GTC,
-                    'position': p.ticket, **kwargs
-                })
 
     def _refresh_unit_margin_and_volume(self):
         unit_lot = ceil(
@@ -194,14 +155,67 @@ class Mt5TraderCore(object):
         )
         self.__logger.debug(f'self.avail_volume: {self.avail_volume}')
 
-    def _determine_order_volume(self):
-        bet_volume = self.betting_system.calculate_volume_by_pl(
-            unit_volume=self.unit_volume, history_deals=self.history_deals
-        )
-        self.__logger.debug(f'bet_volume: {bet_volume}')
-        return min(bet_volume, self.avail_volume)
+    def close_positions(self, **kwargs):
+        if not self.positions:
+            self.__logger.info(f'No position for {self.symbol}.')
+        else:
+            for p in self.positions:
+                self._send_or_check_order({
+                    'action': Mt5.TRADE_ACTION_DEAL,
+                    'symbol': p.symbol, 'volume': p.volume,
+                    'type': (
+                        Mt5.ORDER_TYPE_SELL
+                        if p.type == Mt5.POSITION_TYPE_BUY
+                        else Mt5.ORDER_TYPE_BUY
+                    ),
+                    'type_filling': Mt5.ORDER_FILLING_RETURN,
+                    'type_time': Mt5.ORDER_TIME_GTC,
+                    'position': p.ticket, **kwargs
+                })
+
+    def _send_or_check_order(self, request):
+        self.__logger.debug(f'request: {request}')
+        order_func = 'order_{}'.format('check' if self.__dry_run else 'send')
+        result = getattr(Mt5, order_func)(request)
+        self.__logger.debug(f'result: {result}')
+        response = {
+            k: (v._asdict() if k == 'request' else v)
+            for k, v in result._asdict().items()
+        }
+        if (((not self.__dry_run) and result.retcode == Mt5.TRADE_RETCODE_DONE)
+                or (self.__dry_run and result.retcode == 0)):
+            self.__logger.info('response:' + os.linesep + pformat(response))
+        else:
+            self.__logger.error('response:' + os.linesep + pformat(response))
+            raise Mt5ResponseError(
+                f'Mt5.{order_func}() failed. <= `{result.comment}`'
+            )
+
+    def design_and_place_order(self, act):
+        if (self.position_side and act
+                and (act == 'closing' or act != self.position_side)):
+            self.__logger.info(f'Close a position: {self.position_side}')
+            self.close_positions()
+        if act in ['long', 'short']:
+            order_limits = self._determine_order_limits(side=act)
+            order_volume = self._determine_order_volume()
+            new_volume = (
+                order_volume - self.position_volumes[act]
+                if self.position_side and act == self.position_side
+                else order_volume
+            )
+            if new_volume > 0:
+                self.__logger.info(f'Open an order: {act}')
+                self._place_order(volume=new_volume, side=act, **order_limits)
+                return new_volume
+            else:
+                self.__logger.info(f'Skip an order: {act}')
+                return 0
+        else:
+            return 0
 
     def _determine_order_limits(self, side):
+        self._refresh_symbol_tick_cache()
         price = getattr(
             self.symbol_info_tick, {'long': 'ask', 'short': 'bid'}[side]
         )
@@ -222,6 +236,13 @@ class Mt5TraderCore(object):
         self.__logger.debug(f'order_limits: {order_limits}')
         return order_limits
 
+    def _determine_order_volume(self):
+        bet_volume = self.betting_system.calculate_volume_by_pl(
+            unit_volume=self.unit_volume, history_deals=self.history_deals
+        )
+        self.__logger.debug(f'bet_volume: {bet_volume}')
+        return min(bet_volume, self.avail_volume)
+
     def _place_order(self, volume, side, **kwargs):
         self._send_or_check_order({
             'action': Mt5.TRADE_ACTION_DEAL,
@@ -233,42 +254,26 @@ class Mt5TraderCore(object):
             **kwargs
         })
 
-    def design_and_place_order(self, act):
-        position_volumes = {
-            'long': sum([
-                p.volume for p in self.positions
-                if p.type == Mt5.POSITION_TYPE_BUY
-            ]),
-            'short': sum([
-                p.volume for p in self.positions
-                if p.type == Mt5.POSITION_TYPE_SELL
-            ])
-        }
-        if position_volumes['long'] > position_volumes['short']:
-            position_side = 'long'
-        elif position_volumes['long'] < position_volumes['short']:
-            position_side = 'short'
-        else:
-            position_side = None
-        if (position_side and act
-                and (act == 'closing' or act != position_side)):
-            self.__logger.info('Close a position: {}'.format(position_side))
-            self._close_positions()
-        if act in ['long', 'short']:
-            order_limits = self._determine_order_limits(side=act)
-            order_volume = self._determine_order_volume()
-            new_volume = (
-                order_volume - position_volumes[act]
-                if position_side and act == position_side else order_volume
-            )
-            if new_volume > 0:
-                self.__logger.info(f'Open an order: {act}')
-                self._place_order(volume=new_volume, side=act, **order_limits)
-            else:
-                self.__logger.info(f'Skip an order: {act}')
-            return new_volume
-        else:
-            return 0
+    def print_state_line(self, add_str):
+        self._print_log(
+            '|{0:^11}|{1:^29}|'.format(
+                self.symbol,
+                'B/A:{:>21}'.format(
+                    np.array2string(
+                        np.array([
+                            self.symbol_info_tick.bid,
+                            self.symbol_info_tick.ask
+                        ]),
+                        formatter={'float_kind': lambda f: f'{f:8g}'}
+                    )
+                )
+            ) + (add_str or '')
+        )
+
+    def _print_log(self, data):
+        self.__logger.debug(f'console log: {data}')
+        if not self.__quiet:
+            print(data, flush=True)
 
     def is_margin_lack(self):
         return (
@@ -282,23 +287,170 @@ class Mt5TraderCore(object):
             )
         )
 
-    def print_log(self, data):
-        self.__logger.debug(f'console log: {data}')
-        if not self.__quiet:
-            print(data, flush=True)
+    def fetch_df_tick(self, tick_seconds=60):
+        end_date = datetime.now() + timedelta(seconds=1)
+        start_date = end_date - timedelta(seconds=tick_seconds)
+        ticks = Mt5.copy_ticks_range(
+            self.symbol, start_date, end_date, Mt5.COPY_TICKS_ALL
+        )
+        self.__logger.debug(f'ticks: {ticks}')
+        if isinstance(ticks, list):
+            return pd.DataFrame(ticks)[[
+                'time_msc', 'bid', 'ask'
+            ]].assign(
+                time_msc=lambda d: pd.to_datetime(d['time_msc'], unit='ms')
+            ).set_index('time_msc')
+        else:
+            raise Mt5ResponseError('Mt5.copy_ticks_range() failed.')
 
-    def print_state_line(self, add_str):
-        self.print_log(
-            '|{0:^11}|{1:^29}|'.format(
-                self.symbol,
-                'B/A:{:>21}'.format(
-                    np.array2string(
-                        np.array([
-                            self.symbol_info_tick.bid,
-                            self.symbol_info_tick.ask
-                        ]),
-                        formatter={'float_kind': lambda f: f'{f:8g}'}
+    def fetch_df_rate(self, granularity='M1', count=86400):
+        rates = Mt5.copy_rates_from_pos(
+            self.symbol, getattr(Mt5, f'TIMEFRAME_{granularity}'), 0, count
+        )
+        self.__logger.debug(f'rates: {rates}')
+        if isinstance(rates, list):
+            return pd.DataFrame(rates).drop(
+                columns='real_volume'
+            ).assign(
+                time=lambda d: pd.to_datetime(d['time'], unit='s')
+            ).set_index('time')
+        else:
+            raise Mt5ResponseError('Mt5.copy_rates_from_pos() failed.')
+
+
+class AutoTrader(Mt5TraderCore):
+    def __init__(self, tick_seconds=60, hv_granularity='M1', hv_count=86400,
+                 hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
+                 signal_ema_span=1000, significance_level=0.01,
+                 trigger_sharpe_ratio=1, **kwargs):
+        super().__init__(**kwargs)
+        self.__logger = logging.getLogger(__name__)
+        self.__tick_seconds = float(tick_seconds)
+        self.__hv_granularity = hv_granularity
+        self.__hv_count = int(hv_count)
+        self.__hv_ema_span = int(hv_ema_span)
+        self.__max_spread_ratio = float(max_spread_ratio)
+        self.__sleeping_ratio = float(sleeping_ratio)
+        self.signal_detector = EwmaSignalDetector(
+            ema_span=int(signal_ema_span),
+            significance_level=float(significance_level),
+            trigger_sharpe_ratio=float(trigger_sharpe_ratio)
+        )
+        self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
+
+    def invoke(self):
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        self.refresh_mt5_caches()
+        self.make_decision()
+
+    def make_decision(self):
+        st = self.determine_sig_state()
+        new_volume = self.design_and_place_order(act=st['act'])
+        if new_volume != 0:
+            st['state'] = st['state'].replace(
+                '-> ',
+                '-> {:.1f}% '.format(
+                    round(
+                        (
+                            self.min_margins[
+                                {'long': 'ask', 'short': 'bid'}[st['act']]
+                            ] / self.symbol_info.volume_min * new_volume
+                            / self.account_info.balance * 100
+                        ),
+                        1
                     )
                 )
-            ) + (add_str or '')
+            )
+        elif st['act'] in ['long', 'short']:
+            st['state'] = 'LACK OF FUNDS'
+        else:
+            pass
+        self.print_state_line(
+            add_str=(st['log_str'] + '{:^27}|'.format(st['state']))
+        )
+
+    def determine_sig_state(self):
+        pos_pct = '{:.1f}%'.format(
+            round(
+                (
+                    abs(
+                        self.position_volumes['long']
+                        - self.position_volumes['short']
+                    ) / self.symbol_info.volume_min
+                    * self.min_margins[self.position_side]
+                    / self.account_info.balance * 100
+                ),
+                1
+            ) if self.position_side else 0
+        )
+        df_tick = self.fetch_df_tick(tick_seconds=self.__tick_seconds)
+        sig = self.signal_detector.detect(
+            df_tick=df_tick, position_side=self.position_side
+        )
+        sleep_triggers = self._check_volume_and_volatility()
+        if df_tick.shape[0] == 0:
+            act = None
+            state = 'TRADING HALTED'
+        elif self.position_side and self.position_side == 'closing':
+            act = 'closing'
+            state = '{0} {1} ->'.format(pos_pct, self.position_side.upper())
+        elif int(self.account_info.balance) == 0:
+            act = None
+            state = 'NO FUND'
+        elif (self.position_side
+              and ((sig['act'] and sig['act'] == self.position_side)
+                   or not sig['act'])):
+            act = None
+            state = '{0} {1}'.format(pos_pct, self.position_side.upper())
+        elif self.is_margin_lack():
+            act = None
+            state = 'LACK OF FUNDS'
+        elif self._is_over_spread():
+            act = None
+            state = 'OVER-SPREAD'
+        elif sig['act'] != 'closing' and sleep_triggers.all():
+            act = None
+            state = 'LOW HV AND VOLUME'
+        elif sig['act'] != 'closing' and sleep_triggers['hv_ema']:
+            act = None
+            state = 'LOW HV'
+        elif sig['act'] != 'closing' and sleep_triggers['volume_ema']:
+            act = None
+            state = 'LOW VOLUME'
+        elif not sig['act']:
+            act = None
+            state = '-'
+        elif self.position_side:
+            act = sig['act']
+            state = '{0} {1} -> {2}'.format(
+                pos_pct, self.position_side.upper(), sig['act'].upper()
+            )
+        else:
+            act = sig['act']
+            state = '-> {}'.format(sig['act'].upper())
+        return {
+            'act': act, 'state': state,
+            **{('sig_act' if k == 'act' else k): v for k, v in sig.items()}
+        }
+
+    def _is_over_spread(self):
+        return (
+            (
+                (self.symbol_info_tick.ask - self.symbol_info_tick.bid)
+                / (self.symbol_info_tick.ask + self.symbol_info_tick.bid) * 2
+            ) >= self.__max_spread_ratio
+        )
+
+    def _check_volume_and_volatility(self):
+        return self.fetch_df_rate(
+            self, granularity=self.__hv_granularity, count=self.__hv_count
+        ).assign(
+            volume_ema=lambda d: d['tick_volume'].ewm(
+                span=self.__hv_ema_span, adjust=False
+            ).mean(skipna=True),
+            hv_ema=lambda d: np.log(d['close']).diff().ewm(
+                span=self.__hv_ema_span, adjust=False
+            ).std(ddof=1)
+        )[['volume_ema', 'hv_ema']].pipe(
+            lambda d: (d.iloc[-1] < d.quantile(self.__sleeping_ratio))
         )

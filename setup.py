@@ -18,9 +18,7 @@ setup(
     url='https://github.com/dceoy/mteor',
     packages=find_packages(),
     include_package_data=True,
-    install_requires=[
-        'docopt', 'MetaTrader5', 'numpy', 'pandas', 'scipy', 'statsmodels'
-    ],
+    install_requires=['docopt', 'MetaTrader5', 'numpy', 'pandas', 'scipy'],
     entry_points={'console_scripts': ['mteor=mteor.cli:main']},
     classifiers=[
         'Development Status :: 4 - Beta',
