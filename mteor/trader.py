@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 from .bet import BettingSystem
-from .signal import EwmaSignalDetector
+from .signal import MacdSignalDetector
 from .util import Mt5ResponseError
 
 
@@ -321,20 +321,30 @@ class Mt5TraderCore(object):
 class AutoTrader(Mt5TraderCore):
     def __init__(self, tick_seconds=60, hv_granularity='M1', hv_count=86400,
                  hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
-                 signal_ema_span=1000, significance_level=0.01,
-                 trigger_sharpe_ratio=1, **kwargs):
+                 fast_ema_span=12, slow_ema_span=26, macd_ema_span=9,
+                 generic_ema_span=1024, significance_level=0.01,
+                 trigger_sharpe_ratio=1, signal_count=1, **kwargs):
         super().__init__(**kwargs)
         self.__logger = logging.getLogger(__name__)
+        self.signal_detector = MacdSignalDetector(
+            fast_ema_span=int(fast_ema_span),
+            slow_ema_span=int(slow_ema_span),
+            macd_ema_span=int(macd_ema_span),
+            generic_ema_span=int(generic_ema_span),
+            significance_level=float(significance_level),
+            trigger_sharpe_ratio=float(trigger_sharpe_ratio),
+            signal_count=int(signal_count)
+        )
         self.__tick_seconds = float(tick_seconds)
         self.__hv_granularity = hv_granularity
         self.__hv_count = int(hv_count)
         self.__hv_ema_span = int(hv_ema_span)
         self.__max_spread_ratio = float(max_spread_ratio)
         self.__sleeping_ratio = float(sleeping_ratio)
-        self.signal_detector = EwmaSignalDetector(
-            ema_span=int(signal_ema_span),
-            significance_level=float(significance_level),
-            trigger_sharpe_ratio=float(trigger_sharpe_ratio)
+        self.__min_tick_length = max(
+            self.signal_detector.slow_ema_span,
+            self.signal_detector.macd_ema_span,
+            self.signal_detector.generic_ema_span
         )
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
@@ -383,15 +393,20 @@ class AutoTrader(Mt5TraderCore):
                 1
             ) if self.position_side else 0
         )
-        df_tick = self.fetch_df_tick(tick_seconds=self.__tick_seconds)
+        sleep_triggers = self._check_volume_and_volatility()
+        df_tick = self.fetch_df_tick(
+            tick_seconds=self.__tick_seconds
+        )[['bid', 'ask']]
         sig = self.signal_detector.detect(
             df_tick=df_tick, position_side=self.position_side
         )
-        sleep_triggers = self._check_volume_and_volatility()
-        if df_tick.shape[0] == 0:
+        if not self._is_tradable(df_tick=df_tick):
             act = None
             state = 'TRADING HALTED'
-        elif self.position_side and self.position_side == 'closing':
+        elif df_tick.shape[0] < self.__min_tick_length:
+            act = None
+            state = 'TOO FEW TICKS'
+        elif self.position_side and sig['act'] == 'closing':
             act = 'closing'
             state = '{0} {1} ->'.format(pos_pct, self.position_side.upper())
         elif int(self.account_info.balance) == 0:
@@ -432,6 +447,14 @@ class AutoTrader(Mt5TraderCore):
             'act': act, 'state': state,
             **{('sig_act' if k == 'act' else k): v for k, v in sig.items()}
         }
+
+    def _is_tradable(self, df_tick):
+        return (
+            df_tick.shape[0] > 0 and (
+                (datetime.now() - df_tick.index[-1])
+                < (df_tick.index[-1] - df_tick.index[0])
+            )
+        )
 
     def _is_over_spread(self):
         return (
