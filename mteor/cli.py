@@ -3,59 +3,99 @@
 Automated Trader using MetaTrader 5
 
 Usage:
-  mteor -h|--help
-  mteor --version
-  mteor mt5 [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>]
-  mteor symbol [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
-  mteor rate [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
-    [--granularity=<str>] [--count=<int>] <instrument>
-  mteor tick [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
-    [--seconds=<float>] [--date-to=<date>] <instrument>
-  mteor margin [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
-  mteor position [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>]
-  mteor order [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>]
-  mteor deal [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--hours=<floatt>]
-    [--date-to=<date>]
-  mteor close [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-    [--mt5-password=<str>] [--mt5-server=<str>] [--dry-run] <instrument>
+    mteor -h|--help
+    mteor --version
+    mteor mt5 [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>]
+    mteor symbol [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
+    mteor rate [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
+        [--granularity=<str>] [--count=<int>] <instrument>
+    mteor tick [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
+        [--seconds=<float>] [--date-to=<date>] <instrument>
+    mteor margin [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
+    mteor position [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>]
+    mteor order [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>]
+    mteor deal [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>] [--hours=<floatt>]
+        [--date-to=<date>]
+    mteor close [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>] [--dry-run] <instrument>
+    mteor trade [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+        [--mt5-password=<str>] [--mt5-server=<str>] [--betting-strategy=<str>]
+        [--history-hours=<float>] [--unit-margin=<ratio>]
+        [--preserved-margin=<ratio>] [--take-profit-limit=<float>]
+        [--stop-loss-limit=<float>] [--trailing-stop-limit=<float>]
+        [--tick-seconds=<float>] [--hv-granularity=<str>] [--hv-count=<int>]
+        [--hv-ema-span=<int>] [--max-spread=<float>] [--sleeping=<ratio>]
+        [--signal-ema-span=<int>] [--significance-level=<float>] [--quiet]
+        [--dry-run] <instrument>
 
 Commands:
-    mt5                   Print MetaTrader 5 versions, status, and settings
-    symbol                Print information about a financial instrument
-    rate                  Print rates of a financial instrument
-    tick                  Print ticks of a financial instrument
-    margin                Print minimum margins to perform trading operations
-    position              Print open positions
-    order                 Print active orders
-    deal                  Print deals from trading history
-    close                 Close open positions
+    mt5                 Print MetaTrader 5 versions, status, and settings
+    symbol              Print information about a financial instrument
+    rate                Print rates of a financial instrument
+    tick                Print ticks of a financial instrument
+    margin              Print minimum margins to perform trading operations
+    position            Print open positions
+    order               Print active orders
+    deal                Print deals from trading history
+    close               Close open positions
 
 Options:
-    -h, --help            Print help and exit
-    --version             Print version and exit
-    --debug, --info       Execute a command with debug|info messages
-    --mt5-exe=<path>      Specify a path to a MetaTrader 5 (MT5) exe file
-    --mt5-login=<str>     Specify a MT5 trading account number
-    --mt5-password=<str>  Specify a MT5 trading account password
-    --mt5-server=<str>    Specify a MT5 trade server name
-    --csv=<path>          Write data with CSV into a file
-    --granularity=<str>   Specify a timeframe granularity [default: M1]
-    --count=<int>         Specify a record count [default: 10]
-    --seconds=<float>     Specify seconds to look back [default: 60]
-    --date-to=<date>      Specify an ending datetime
-    --hours=<float>       Specify hours to look back [default: 24]
-    --dry-run             Invoke a command with dry-run mode
+    -h, --help          Print help and exit
+    --version           Print version and exit
+    --debug, --info     Execute a command with debug|info messages
+    --mt5-exe=<path>    Specify a path to a MetaTrader 5 (MT5) exe file
+    --mt5-login=<str>   Specify a MT5 trading account number
+    --mt5-password=<str>
+                        Specify a MT5 trading account password
+    --mt5-server=<str>  Specify a MT5 trade server name
+    --csv=<path>        Write data with CSV into a file
+    --granularity=<str>
+                        Specify a timeframe granularity [default: M1]
+    --count=<int>       Specify a record count [default: 10]
+    --seconds=<float>   Specify seconds to look back [default: 60]
+    --date-to=<date>    Specify an ending datetime
+    --hours=<float>     Specify hours to look back [default: 24]
+    --dry-run           Invoke a command with dry-run mode
+    --betting-strategy=<str>
+                        Specify the betting strategy [default: constant]
+                        {constant, martingale, paroli, dalembert, oscarsgrind}
+    --history-hours=<float>
+                        Specify hours for deal history [default: 24]
+    --unit-margin=<ratio>
+                        Specify the unit margin ratio to NAV [default: 0.01]
+    --preserved-margin=<ratio>
+                        Specify the preserved margin ratio [default: 0.01]
+    --take-profit-limit=<float>
+                        Specify the take-profit limit ratio [default: 0.01]
+    --trailing-stop-limit=<float>
+                        Specify the trailing-stop limit ratio [default: 0.01]
+    --stop-loss-limit=<float>
+                        Specify the stop-loss limit ratio [default: 0.01]
+    --tick-seconds=<float>
+                        Specify seconds for tick history [default: 60]
+    --hv-granularity=<str>
+                        Specify the granularity for HV [default: M1]
+    --hv-count=<int>    Specify the count for HV [default: 86400]
+    --hv-ema-span=<int>
+                        Specify the EMA span for HV [default: 12]
+    --max-spread=<float>
+                        Specify the max spread ratio [default: 0.01]
+    --sleeping=<ratio>  Specify the daily sleeping ratio [default: 0]
+    --signal-ema-span=<int>
+                        Specify the EMA span for signals [default: 1024]
+    --significance-level=<float>
+                        Specify the significance level [default: 0.01]
 
 Arguments:
-    <instrument>          Financial instrument symbol
+    <instrument>        Financial instrument symbol
 """
 
 import logging
@@ -69,6 +109,7 @@ from .info import (print_deals, print_margins, print_mt5_info, print_orders,
                    print_positions, print_rates, print_symbol_info,
                    print_ticks)
 from .order import close_positions
+from .trader import AutoTrader
 from .util import Mt5ResponseError, set_log_config
 
 
@@ -79,7 +120,27 @@ def main():
     logger.debug(f'args:{os.linesep}{args}')
     try:
         _initialize_mt5(args=args)
-        if args['mt5']:
+        if args.get('trade'):
+            logger.info('Autonomous trading')
+            AutoTrader(
+                symbol=args['<instrument>'],
+                betting_strategy=args['--betting-strategy'],
+                history_hoursa=args['--history-hours'],
+                unit_margin_ratio=args['--unit-margin'],
+                preserved_margin_ratio=args['--preserved-margin'],
+                take_profit_limit_ratio=args['--take-profit-limit'],
+                stop_loss_limit_ratio=args['--stop-loss-limit'],
+                trailing_stop_limit_ratio=args['--trailing-stop-limit'],
+                tick_seconds=args['--tick-seconds'],
+                granularity=args['--hv-granularity'],
+                hv_count=args['--hv-count'], hv_ema_span=args['--hv-ema-span'],
+                max_spread_ratio=args['--max-spread'],
+                sleeping_ratio=args['--sleeping'],
+                signal_ema_span=args['--signal-ema-span'],
+                significance_level=args['--significance-level'],
+                quiet=args['--quiet'], dry_run=args['--dry-run']
+            ).invoke()
+        elif args['mt5']:
             print_mt5_info()
         elif args['symbol']:
             print_symbol_info(symbol=args['<instrument>'])
