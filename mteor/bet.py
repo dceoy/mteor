@@ -39,7 +39,7 @@ class BettingSystem(object):
         if not deals:
             return last_volume or init_volume or unit_volume
         else:
-            pl = pd.Series([d.profit for d in deals])
+            pl = pd.Series([d.profit for d in deals], dtype=float)
             if pl.iloc[-1] < 0:
                 won_last = False
             elif pl.iloc[-1] > 0 and pl[-2:].sum() > 0:
