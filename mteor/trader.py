@@ -321,14 +321,12 @@ class Mt5TraderCore(object):
 class AutoTrader(Mt5TraderCore):
     def __init__(self, tick_seconds=60, hv_granularity='M1', hv_count=86400,
                  hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
-                 signal_ema_span=1024, significance_level=0.01,
-                 trigger_sharpe_ratio=1, **kwargs):
+                 signal_ema_span=1024, significance_level=0.01, **kwargs):
         super().__init__(**kwargs)
         self.__logger = logging.getLogger(__name__)
         self.signal_detector = SignalDetector(
             signal_ema_span=int(signal_ema_span),
-            significance_level=float(significance_level),
-            trigger_sharpe_ratio=float(trigger_sharpe_ratio)
+            significance_level=float(significance_level)
         )
         self.__tick_seconds = float(tick_seconds)
         self.__hv_granularity = hv_granularity

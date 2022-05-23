@@ -9,12 +9,10 @@ import scipy.stats as scs
 
 
 class SignalDetector(object):
-    def __init__(self, ema_span=1024, significance_level=0.01,
-                 trigger_sharpe_ratio=1):
+    def __init__(self, ema_span=1024, significance_level=0.01):
         self.__logger = logging.getLogger(__name__)
         self.ema_span = ema_span
         self.significance_level = significance_level
-        self.trigger_sharpe_ratio = trigger_sharpe_ratio
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
     def detect(self, df_tick, position_side=None):
@@ -36,36 +34,21 @@ class SignalDetector(object):
             alpha=(1 - self.significance_level), df=(self.ema_span - 1),
             loc=sig['sr_ema'], scale=sig['sr_emse']
         )
-        if sig['lrv_ema'] > 0:
-            if sig['sr_ema'] > 0:
-                if ((emlrv_ci[0] > 0 and emsr_ci[0] > 0)
-                        or sig['sr_ema'] > self.trigger_sharpe_ratio):
-                    act = 'long'
-                elif position_side == 'short':
-                    act = 'closing'
-                else:
-                    act = None
-            elif position_side == 'long' and emsr_ci[1] < 0:
-                act = 'closing'
-            else:
-                act = None
-        elif sig['lrv_ema'] < 0:
-            if sig['sr_ema'] < 0:
-                if ((emlrv_ci[1] < 0 and emsr_ci[1] < 0)
-                        or sig['sr_ema'] < -self.trigger_sharpe_ratio):
-                    act = 'short'
-                elif position_side == 'long':
-                    act = 'closing'
-                else:
-                    act = None
-            elif position_side == 'short' and emsr_ci[0] > 0:
-                act = 'closing'
-            else:
-                act = None
+        if emlrv_ci[0] > 0 and emsr_ci[0] > 0:
+            act = 'long'
+        elif emlrv_ci[1] < 0 and emsr_ci[1] < 0:
+            act = 'short'
+        elif ((position_side == 'short'
+               and ((emlrv_ci[0] > 0 and sig['sr_ema'] > 0)
+                    or (emsr_ci[0] > 0 and sig['lrv_ema'] > 0)))
+              or (position_side == 'long'
+                  and ((emlrv_ci[1] < 0 and sig['sr_ema'] < 0)
+                       or (emsr_ci[1] < 0 and sig['lrv_ema'] < 0)))):
+            act = 'closing'
         else:
             act = None
         return {
-            'act': act, **sig.to_dict(),
+            'act': act, **sig,
             'emlrv_ci_lower': emlrv_ci[0],
             'emlrv_ci_upper': emlrv_ci[1],
             'emsr_ci_lower': emsr_ci[0], 'emsr_ci_upper': emsr_ci[1],
