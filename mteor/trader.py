@@ -3,7 +3,7 @@
 import logging
 import os
 import signal
-from datetime import datetime, timedelta
+from datetime import timedelta
 from math import ceil
 from pprint import pformat
 
@@ -39,6 +39,7 @@ class Mt5TraderCore(object):
         self.orders = list()
         self.min_margins = dict()
         self.history_deals = list()
+        self.last_tick_time = None
         self.unit_margin = None
         self.unit_volume = None
         self.avail_margin = None
@@ -49,7 +50,7 @@ class Mt5TraderCore(object):
     def refresh_mt5_caches(self):
         self._refresh_account_cache()
         self._refresh_symbol_cache()
-        self._refresh_symbol_tick_cache()
+        self._refresh_symbol_info_tick_cache()
         self._refresh_position_cache()
         self._refresh_order_cache()
         self._refresh_margin_cache()
@@ -68,11 +69,16 @@ class Mt5TraderCore(object):
         if not self.symbol_info:
             raise Mt5ResponseError('Mt5.symbol_info() failed.')
 
-    def _refresh_symbol_tick_cache(self):
+    def _refresh_symbol_info_tick_cache(self):
         self.symbol_info_tick = Mt5.symbol_info_tick(self.symbol)
         self.__logger.debug(f'self.symbol_info_tick: {self.symbol_info_tick}')
         if not self.symbol_info_tick:
             raise Mt5ResponseError('Mt5.symbol_info_tick() failed.')
+        else:
+            self.last_tick_time = pd.to_datetime(
+                self.symbol_info_tick.time, unit='s'
+            )
+            self.__logger.debug(f'self.last_tick_time: {self.last_tick_time}')
 
     def _refresh_position_cache(self):
         self.positions = Mt5.positions_get(symbol=self.symbol)
@@ -124,10 +130,12 @@ class Mt5TraderCore(object):
             raise Mt5ResponseError('Mt5.order_calc_margin() failed.')
 
     def _refresh_history_deal_cache(self):
-        end_date = datetime.now() + timedelta(seconds=1)
+        date_from = (
+            self.last_tick_time - timedelta(hours=self.__history_hours)
+        )
+        date_to = self.last_tick_time + timedelta(hours=self.__history_hours)
         self.history_deals = Mt5.history_deals_get(
-            (end_date - timedelta(hours=self.__history_hours)),
-            end_date, group=self.symbol
+            date_from, date_to, group=self.symbol
         )
         if not isinstance(self.history_deals, tuple):
             raise Mt5ResponseError('Mt5.history_deals_get() failed.')
@@ -215,7 +223,7 @@ class Mt5TraderCore(object):
             return 0
 
     def _determine_order_limits(self, side):
-        self._refresh_symbol_tick_cache()
+        self._refresh_symbol_info_tick_cache()
         price = getattr(
             self.symbol_info_tick, {'long': 'ask', 'short': 'bid'}[side]
         )
@@ -288,38 +296,43 @@ class Mt5TraderCore(object):
         )
 
     def fetch_df_tick(self, tick_seconds=60):
-        end_date = datetime.now() + timedelta(seconds=1)
-        start_date = end_date - timedelta(seconds=tick_seconds)
+        self._refresh_symbol_info_tick_cache()
+        date_from = self.last_tick_time - timedelta(seconds=tick_seconds)
+        date_to = self.last_tick_time + timedelta(seconds=tick_seconds)
         ticks = Mt5.copy_ticks_range(
-            self.symbol, start_date, end_date, Mt5.COPY_TICKS_ALL
+            self.symbol, date_from, date_to, Mt5.COPY_TICKS_ALL
         )
         self.__logger.debug(f'ticks: {ticks}')
-        if isinstance(ticks, list):
-            return pd.DataFrame(ticks)[[
+        if not isinstance(ticks, np.ndarray):
+            raise Mt5ResponseError('Mt5.copy_ticks_range() failed.')
+        else:
+            df_tick = pd.DataFrame(ticks)[[
                 'time_msc', 'bid', 'ask'
             ]].assign(
                 time_msc=lambda d: pd.to_datetime(d['time_msc'], unit='ms')
             ).set_index('time_msc')
-        else:
-            raise Mt5ResponseError('Mt5.copy_ticks_range() failed.')
+            self.__logger.debug(f'df_tick.shape: {df_tick.shape}')
+            return df_tick
 
     def fetch_df_rate(self, granularity='M1', count=86400):
         rates = Mt5.copy_rates_from_pos(
             self.symbol, getattr(Mt5, f'TIMEFRAME_{granularity}'), 0, count
         )
         self.__logger.debug(f'rates: {rates}')
-        if isinstance(rates, list):
-            return pd.DataFrame(rates).drop(
+        if not isinstance(rates, np.ndarray):
+            raise Mt5ResponseError('Mt5.copy_rates_from_pos() failed.')
+        else:
+            df_rate = pd.DataFrame(rates).drop(
                 columns='real_volume'
             ).assign(
                 time=lambda d: pd.to_datetime(d['time'], unit='s')
             ).set_index('time')
-        else:
-            raise Mt5ResponseError('Mt5.copy_rates_from_pos() failed.')
+            self.__logger.debug(f'df_rate.shape: {df_rate.shape}')
+            return df_rate
 
 
 class AutoTrader(Mt5TraderCore):
-    def __init__(self, tick_seconds=60, hv_granularity='M1', hv_count=86400,
+    def __init__(self, tick_seconds=3600, hv_granularity='M1', hv_count=86400,
                  hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
                  signal_ema_span=1024, significance_level=0.01, **kwargs):
         super().__init__(**kwargs)
@@ -375,8 +388,9 @@ class AutoTrader(Mt5TraderCore):
                         self.position_volumes['long']
                         - self.position_volumes['short']
                     ) / self.symbol_info.volume_min
-                    * self.min_margins[self.position_side]
-                    / self.account_info.balance * 100
+                    * self.min_margins[
+                        {'long': 'ask', 'short': 'bid'}[self.position_side]
+                    ] / self.account_info.balance * 100
                 ),
                 1
             ) if self.position_side else 0
@@ -437,24 +451,19 @@ class AutoTrader(Mt5TraderCore):
         }
 
     def _is_tradable(self, df_tick):
-        return (
-            df_tick.shape[0] > 0 and (
-                (datetime.now() - df_tick.index[-1])
-                < (df_tick.index[-1] - df_tick.index[0])
-            )
-        )
+        return (df_tick.shape[0] > 0)
 
     def _is_over_spread(self):
-        return (
-            (
-                (self.symbol_info_tick.ask - self.symbol_info_tick.bid)
-                / (self.symbol_info_tick.ask + self.symbol_info_tick.bid) * 2
-            ) >= self.__max_spread_ratio
+        spread_ratio = (
+            (self.symbol_info_tick.ask - self.symbol_info_tick.bid)
+            / (self.symbol_info_tick.ask + self.symbol_info_tick.bid) * 2
         )
+        self.__logger.debug(f'spread_ratio: {spread_ratio}')
+        return (spread_ratio >= self.__max_spread_ratio)
 
     def _check_volume_and_volatility(self):
         return self.fetch_df_rate(
-            self, granularity=self.__hv_granularity, count=self.__hv_count
+            granularity=self.__hv_granularity, count=self.__hv_count
         ).assign(
             volume_ema=lambda d: d['tick_volume'].ewm(
                 span=self.__hv_ema_span, adjust=False

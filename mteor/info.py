@@ -13,10 +13,7 @@ from .util import print_df, print_json
 def print_deals(hours, date_to=None, group=None):
     logger = logging.getLogger(__name__)
     logger.info(f'hours: {hours}, date_to: {date_to}, group: {group}')
-    end_date = (
-        pd.to_datetime(date_to) if date_to
-        else (datetime.now() + timedelta(seconds=1))
-    )
+    end_date = (pd.to_datetime(date_to) if date_to else datetime.utcnow())
     logger.info(f'end_date: {end_date}')
     deals = Mt5.history_deals_get(
         (end_date - timedelta(hours=float(hours))), end_date,
@@ -77,20 +74,25 @@ def print_ticks(symbol, seconds, date_to=None, csv_path=None):
 
 def _fetch_df_tick(symbol, seconds, date_to=None):
     logger = logging.getLogger(__name__)
-    end_date = (
-        pd.to_datetime(date_to) if date_to
-        else (datetime.now() + timedelta(seconds=1))
-    )
-    logger.info(f'end_date: {end_date}')
-    start_date = end_date - timedelta(seconds=float(seconds))
-    logger.info(f'start_date: {start_date}')
+    delta = timedelta(seconds=seconds)
+    if date_to:
+        end_date = pd.to_datetime(date_to)
+        start_date = end_date - delta
+    else:
+        symbol_info_tick = Mt5.symbol_info_tick(symbol)
+        logger.debug(f'symbol_info_tick: {symbol_info_tick}')
+        last_tick_time = pd.to_datetime(symbol_info_tick.time, unit='s')
+        end_date = last_tick_time + delta
+        start_date = last_tick_time - delta
+    logger.info(f'start_date: {start_date}, end_date: {end_date}')
     ticks = Mt5.copy_ticks_range(
         symbol, start_date, end_date, Mt5.COPY_TICKS_ALL
     )
     logger.debug(f'ticks: {ticks}')
     return pd.DataFrame(ticks).assign(
-        time=lambda d: pd.to_datetime(d['time'], unit='s')
-    ).set_index('time')
+        time=lambda d: pd.to_datetime(d['time'], unit='s'),
+        time_msc=lambda d: pd.to_datetime(d['time_msc'], unit='ms')
+    ).set_index(['time', 'time_msc'])
 
 
 def print_rates(symbol, granularity, count, start_pos=0, csv_path=None):

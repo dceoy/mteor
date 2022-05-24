@@ -22,7 +22,7 @@ Usage:
     mteor order [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>]
     mteor deal [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-        [--mt5-password=<str>] [--mt5-server=<str>] [--hours=<floatt>]
+        [--mt5-password=<str>] [--mt5-server=<str>] [--hours=<float>]
         [--date-to=<date>]
     mteor close [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>] [--dry-run] <instrument>
@@ -70,7 +70,7 @@ Options:
     --history-hours=<float>
                         Specify hours for deal history [default: 24]
     --unit-margin=<ratio>
-                        Specify the unit margin ratio to NAV [default: 0.01]
+                        Specify the unit margin ratio to NAV [default: 0.1]
     --preserved-margin=<ratio>
                         Specify the preserved margin ratio [default: 0.01]
     --take-profit-limit=<float>
@@ -80,12 +80,12 @@ Options:
     --stop-loss-limit=<float>
                         Specify the stop-loss limit ratio [default: 0.01]
     --tick-seconds=<float>
-                        Specify seconds for tick history [default: 60]
+                        Specify seconds for tick history [default: 3600]
     --hv-granularity=<str>
                         Specify the granularity for HV [default: M1]
     --hv-count=<int>    Specify the count for HV [default: 86400]
     --hv-ema-span=<int>
-                        Specify the EMA span for HV [default: 12]
+                        Specify the EMA span for HV [default: 60]
     --max-spread=<float>
                         Specify the max spread ratio [default: 0.01]
     --sleeping=<ratio>  Specify the daily sleeping ratio [default: 0]
@@ -125,14 +125,14 @@ def main():
             AutoTrader(
                 symbol=args['<instrument>'],
                 betting_strategy=args['--betting-strategy'],
-                history_hoursa=args['--history-hours'],
+                history_hours=args['--history-hours'],
                 unit_margin_ratio=args['--unit-margin'],
                 preserved_margin_ratio=args['--preserved-margin'],
                 take_profit_limit_ratio=args['--take-profit-limit'],
                 stop_loss_limit_ratio=args['--stop-loss-limit'],
                 trailing_stop_limit_ratio=args['--trailing-stop-limit'],
                 tick_seconds=args['--tick-seconds'],
-                granularity=args['--hv-granularity'],
+                hv_granularity=args['--hv-granularity'],
                 hv_count=args['--hv-count'], hv_ema_span=args['--hv-ema-span'],
                 max_spread_ratio=args['--max-spread'],
                 sleeping_ratio=args['--sleeping'],
