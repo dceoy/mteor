@@ -17,7 +17,7 @@ class SignalDetector(object):
 
     def detect(self, df_tick, position_side=None):
         df_sig = self._calculate_sharpe_ratio(
-            df_lrv=self._calculate_log_return_velocity(
+            df_lrr=self._calculate_log_return_rate(
                 df_tick=df_tick, span=self.signal_ema_span
             ),
             span=self.signal_ema_span
@@ -26,37 +26,37 @@ class SignalDetector(object):
             df_sig.iloc[-1].to_dict() if df_sig.shape[0] > 0
             else {c: np.nan for c in df_sig.columns}
         )
-        emlrv_ci = self._calculate_ci(
+        emlrr_ci = self._calculate_ci(
             alpha=(1 - self.significance_level), df=(self.signal_ema_span - 1),
-            loc=sig['lrv_ema'], scale=sig['lrv_emse']
+            loc=sig['lrr_ema'], scale=sig['lrr_emse']
         )
         emsr_ci = self._calculate_ci(
             alpha=(1 - self.significance_level), df=(self.signal_ema_span - 1),
             loc=sig['sr_ema'], scale=sig['sr_emse']
         )
-        if emlrv_ci[0] > 0 and emsr_ci[0] > 0:
+        if emlrr_ci[0] > 0 and emsr_ci[0] > 0:
             act = 'long'
-        elif emlrv_ci[1] < 0 and emsr_ci[1] < 0:
+        elif emlrr_ci[1] < 0 and emsr_ci[1] < 0:
             act = 'short'
         elif ((position_side == 'short'
-               and ((emlrv_ci[0] > 0 and sig['sr_ema'] > 0)
-                    or (emsr_ci[0] > 0 and sig['lrv_ema'] > 0)))
+               and ((emlrr_ci[0] > 0 and sig['sr_ema'] > 0)
+                    or (emsr_ci[0] > 0 and sig['lrr_ema'] > 0)))
               or (position_side == 'long'
-                  and ((emlrv_ci[1] < 0 and sig['sr_ema'] < 0)
-                       or (emsr_ci[1] < 0 and sig['lrv_ema'] < 0)))):
+                  and ((emlrr_ci[1] < 0 and sig['sr_ema'] < 0)
+                       or (emsr_ci[1] < 0 and sig['lrr_ema'] < 0)))):
             act = 'closing'
         else:
             act = None
         return {
             'act': act, **sig,
-            'emlrv_ci_lower': emlrv_ci[0],
-            'emlrv_ci_upper': emlrv_ci[1],
+            'emlrr_ci_lower': emlrr_ci[0],
+            'emlrr_ci_upper': emlrr_ci[1],
             'emsr_ci_lower': emsr_ci[0], 'emsr_ci_upper': emsr_ci[1],
             'log_str': '{0:^38}|{1:^34}|'.format(
-                'EMLRV:{0:>10}{1:>18}'.format(
-                    '{:.1g}'.format(emlrv_ci.mean()),
+                'EMLRR:{0:>10}{1:>18}'.format(
+                    '{:.1g}'.format(emlrr_ci.mean()),
                     np.array2string(
-                        emlrv_ci,
+                        emlrr_ci,
                         formatter={'float_kind': lambda f: f'{f:.1g}'}
                     )
                 ),
@@ -70,23 +70,21 @@ class SignalDetector(object):
         }
 
     @staticmethod
-    def _calculate_log_return_velocity(df_tick, span):
+    def _calculate_log_return_rate(df_tick, span):
         return df_tick.reset_index().assign(
             mid=lambda d: d[['ask', 'bid']].mean(axis=1),
             delta_sec=lambda d: d['time_msc'].diff().dt.total_seconds()
         ).set_index('time_msc').assign(
-            log_return=lambda d: np.log(d['mid']).diff()
+            lrr=lambda d: (np.log(d['mid']).diff() / d['delta_sec'])
         ).assign(
-            lrv=lambda d: (d['log_return'] / d['delta_sec'])
-        ).assign(
-            lrv_ema=lambda d: d['lrv'].ewm(span=span, adjust=False).mean(),
-            lrv_emse=lambda d:
-            np.sqrt(d['lrv'].ewm(span=span, adjust=False).var(ddof=1) / span)
+            lrr_ema=lambda d: d['lrr'].ewm(span=span, adjust=False).mean(),
+            lrr_emse=lambda d:
+            np.sqrt(d['lrr'].ewm(span=span, adjust=False).var(ddof=1) / span)
         )
 
     @staticmethod
-    def _calculate_sharpe_ratio(df_lrv, span):
-        return df_lrv.assign(
+    def _calculate_sharpe_ratio(df_lrr, span):
+        return df_lrr.assign(
             return_rate=lambda d: (np.exp(d['log_return']) - 1),
             spread_ratio=lambda d: (1 - ((d['ask'] - d['bid']) / d['mid']))
         ).assign(
