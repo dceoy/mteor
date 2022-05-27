@@ -9,18 +9,20 @@ import scipy.stats as scs
 
 
 class SignalDetector(object):
-    def __init__(self, signal_ema_span=1024, significance_level=0.01):
+    def __init__(self, lrr_ema_span=1000, sr_ema_span=1000,
+                 significance_level=0.01):
         self.__logger = logging.getLogger(__name__)
-        self.signal_ema_span = signal_ema_span
+        self.lrr_ema_span = lrr_ema_span
+        self.sr_ema_span = sr_ema_span
         self.significance_level = significance_level
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
     def detect(self, df_tick, position_side=None):
         df_sig = self._calculate_sharpe_ratio(
             df_lrr=self._calculate_log_return_rate(
-                df_tick=df_tick, span=self.signal_ema_span
+                df_tick=df_tick, span=self.lrr_ema_span
             ),
-            span=self.signal_ema_span
+            span=self.sr_ema_span
         )
         sig = (
             df_sig.iloc[-1].to_dict() if df_sig.shape[0] > 0
@@ -28,23 +30,25 @@ class SignalDetector(object):
         )
         self.__logger.debug(f'sig: {sig}')
         lrr_ema_ci = self._calculate_ci(
-            alpha=(1 - self.significance_level), df=(self.signal_ema_span - 1),
+            alpha=(1 - self.significance_level), df=(self.lrr_ema_span - 1),
             loc=sig['lrr_ema'], scale=sig['lrr_emse']
         )
         self.__logger.debug(f'lrr_ema_ci: {lrr_ema_ci}')
         sr_ema_ci = self._calculate_ci(
             alpha=(1 - self.significance_level),
-            df=(self.signal_ema_span - 1), loc=sig['sr_ema'],
+            df=(self.sr_ema_span - 1), loc=sig['sr_ema'],
             scale=sig['sr_emse']
         )
         self.__logger.debug(f'sr_ema_ci: {sr_ema_ci}')
-        if sr_ema_ci[0] > 0 and sig['lrr_ema'] > 0:
+        if ((lrr_ema_ci[0] > 0 and sig['sr_ema'] > 0)
+                or (sr_ema_ci[0] > 0 and sig['lrr_ema'] > 0)):
             act = 'long'
-        elif sr_ema_ci[1] < 0 and sig['lrr_ema'] < 0:
+        elif ((lrr_ema_ci[1] < 0 and sig['sr_ema'] < 0)
+              or (sr_ema_ci[1] < 0 and sig['lrr_ema'] < 0)):
             act = 'short'
-        elif ((position_side == 'short' and lrr_ema_ci[0] > 0
-               and sig['sr_ema'] > 0)
-              or (position_side == 'long' and lrr_ema_ci[1] < 0
+        elif ((position_side == 'short'
+               and sig['lrr_ema'] > 0 and sig['sr_ema'] > 0)
+              or (position_side == 'long' and sig['lrr_ema'] < 0
                   and sig['sr_ema'] < 0)):
             act = 'closing'
         else:

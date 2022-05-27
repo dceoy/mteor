@@ -335,13 +335,13 @@ class Mt5TraderCore(object):
 class AutoTrader(Mt5TraderCore):
     def __init__(self, symbols, tick_seconds=3600, hv_granularity='M1',
                  hv_count=86400, hv_ema_span=60, max_spread_ratio=0.01,
-                 sleeping_ratio=0, signal_ema_span=1024,
+                 sleeping_ratio=0, lrr_ema_span=1000, sr_ema_span=1000,
                  significance_level=0.01, interval_seconds=0, **kwargs):
         super().__init__(symbol=None, **kwargs)
         self.__logger = logging.getLogger(__name__)
         self.symbols = symbols
         self.signal_detector = SignalDetector(
-            signal_ema_span=int(signal_ema_span),
+            lrr_ema_span=int(lrr_ema_span), sr_ema_span=int(sr_ema_span),
             significance_level=float(significance_level)
         )
         self.__tick_seconds = float(tick_seconds)
@@ -414,7 +414,8 @@ class AutoTrader(Mt5TraderCore):
         if not self._is_tradable(df_tick=df_tick):
             act = None
             state = 'TRADING HALTED'
-        elif df_tick.shape[0] < self.signal_detector.signal_ema_span:
+        elif (df_tick.shape[0] < self.signal_detector.lrr_ema_span
+              or df_tick.shape[0] < self.signal_detector.sr_ema_span):
             act = None
             state = 'TOO FEW TICKS'
         elif self.position_side and sig['act'] == 'closing':

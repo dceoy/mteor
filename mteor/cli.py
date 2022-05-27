@@ -34,8 +34,9 @@ Usage:
         [--stop-loss-limit=<float>] [--trailing-stop-limit=<float>]
         [--tick-seconds=<float>] [--hv-granularity=<str>] [--hv-count=<int>]
         [--hv-ema-span=<int>] [--max-spread=<float>] [--sleeping=<ratio>]
-        [--signal-ema-span=<int>] [--significance-level=<float>]
-        [--interval-seconds=<float>] [--quiet] [--dry-run] <instrument>...
+        [--lrr-ema-span=<int>] [--sr-ema-span=<int>]
+        [--significance-level=<float>] [--interval-seconds=<float>] [--quiet]
+        [--dry-run] <instrument>...
 
 Commands:
     mt5                 Print MetaTrader 5 versions, status, and settings
@@ -91,8 +92,10 @@ Options:
     --max-spread=<float>
                         Specify the max spread ratio [default: 0.01]
     --sleeping=<ratio>  Specify the daily sleeping ratio [default: 0]
-    --signal-ema-span=<int>
-                        Specify the EMA span for signals [default: 1024]
+    --lrr-ema-span=<int>
+                        Specify the EMA span for LRR signal [default: 1000]
+    --sr-ema-span=<int>
+                        Specify the EMA span for SR signal [default: 1000]
     --significance-level=<float>
                         Specify the significance level [default: 0.01]
     --interval-seconds=<float>
@@ -140,7 +143,8 @@ def main():
                 hv_count=args['--hv-count'], hv_ema_span=args['--hv-ema-span'],
                 max_spread_ratio=args['--max-spread'],
                 sleeping_ratio=args['--sleeping'],
-                signal_ema_span=args['--signal-ema-span'],
+                lrr_ema_span=args['--lrr-ema-span'],
+                sr_ema_span=args['--sr-ema-span'],
                 significance_level=args['--significance-level'],
                 interval_seconds=args['--interval-seconds'],
                 quiet=args['--quiet'], dry_run=args['--dry-run']
