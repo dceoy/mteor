@@ -26,15 +26,15 @@ Usage:
         [--date-to=<date>]
     mteor close [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>] [--dry-run] <instrument>
-    mteor trade [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
+    mteor open [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>] [--betting-strategy=<str>]
         [--history-hours=<float>] [--unit-margin=<ratio>]
         [--preserved-margin=<ratio>] [--take-profit-limit=<float>]
         [--stop-loss-limit=<float>] [--trailing-stop-limit=<float>]
         [--tick-seconds=<float>] [--hv-granularity=<str>] [--hv-count=<int>]
         [--hv-ema-span=<int>] [--max-spread=<float>] [--sleeping=<ratio>]
-        [--signal-ema-span=<int>] [--significance-level=<float>] [--quiet]
-        [--dry-run] <instrument>
+        [--signal-ema-span=<int>] [--significance-level=<float>]
+        [--interval-seconds=<float>] [--quiet] [--dry-run] <instrument>
 
 Commands:
     mt5                 Print MetaTrader 5 versions, status, and settings
@@ -46,6 +46,7 @@ Commands:
     order               Print active orders
     deal                Print deals from trading history
     close               Close open positions
+    open                Invoke an autonomous trader
 
 Options:
     -h, --help          Print help and exit
@@ -93,6 +94,8 @@ Options:
                         Specify the EMA span for signals [default: 1024]
     --significance-level=<float>
                         Specify the significance level [default: 0.01]
+    --interval-seconds=<float>
+                        Wait seconds between iterations [default: 0]
 
 Arguments:
     <instrument>        Financial instrument symbol
@@ -120,7 +123,7 @@ def main():
     logger.debug(f'args:{os.linesep}{args}')
     try:
         _initialize_mt5(args=args)
-        if args.get('trade'):
+        if args.get('open'):
             logger.info('Autonomous trading')
             AutoTrader(
                 symbol=args['<instrument>'],
@@ -138,6 +141,7 @@ def main():
                 sleeping_ratio=args['--sleeping'],
                 signal_ema_span=args['--signal-ema-span'],
                 significance_level=args['--significance-level'],
+                interval_seconds=args['--interval-seconds'],
                 quiet=args['--quiet'], dry_run=args['--dry-run']
             ).invoke()
         elif args['mt5']:

@@ -3,6 +3,7 @@
 import logging
 import os
 import signal
+import time
 from datetime import timedelta
 from math import ceil
 from pprint import pformat
@@ -176,7 +177,7 @@ class Mt5TraderCore(object):
                         if p.type == Mt5.POSITION_TYPE_BUY
                         else Mt5.ORDER_TYPE_BUY
                     ),
-                    'type_filling': Mt5.ORDER_FILLING_RETURN,
+                    'type_filling': Mt5.ORDER_FILLING_FOK,
                     'type_time': Mt5.ORDER_TIME_GTC,
                     'position': p.ticket, **kwargs
                 })
@@ -263,7 +264,7 @@ class Mt5TraderCore(object):
         })
 
     def print_state_line(self, add_str):
-        self._print_log(
+        self.print_log(
             '|{0:^11}|{1:^29}|'.format(
                 self.symbol,
                 'B/A:{:>21}'.format(
@@ -278,14 +279,14 @@ class Mt5TraderCore(object):
             ) + (add_str or '')
         )
 
-    def _print_log(self, data):
+    def print_log(self, data):
         self.__logger.debug(f'console log: {data}')
         if not self.__quiet:
             print(data, flush=True)
 
     def is_margin_lack(self):
         return (
-            (not self.position) and (
+            (not self.positions) and (
                 self.unit_margin >= self.account_info.margin_free
                 or self.unit_volume == 0
                 or (
@@ -334,7 +335,8 @@ class Mt5TraderCore(object):
 class AutoTrader(Mt5TraderCore):
     def __init__(self, tick_seconds=3600, hv_granularity='M1', hv_count=86400,
                  hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
-                 signal_ema_span=1024, significance_level=0.01, **kwargs):
+                 signal_ema_span=1024, significance_level=0.01,
+                 interval_seconds=0, **kwargs):
         super().__init__(**kwargs)
         self.__logger = logging.getLogger(__name__)
         self.signal_detector = SignalDetector(
@@ -347,12 +349,16 @@ class AutoTrader(Mt5TraderCore):
         self.__hv_ema_span = int(hv_ema_span)
         self.__max_spread_ratio = float(max_spread_ratio)
         self.__sleeping_ratio = float(sleeping_ratio)
+        self.__interval_seconds = float(interval_seconds)
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
     def invoke(self):
+        self.print_log('!!! OPEN DEALS !!!')
         signal.signal(signal.SIGINT, signal.SIG_DFL)
-        self.refresh_mt5_caches()
-        self.make_decision()
+        while True:
+            self.refresh_mt5_caches()
+            self.make_decision()
+            time.sleep(self.__interval_seconds)
 
     def make_decision(self):
         st = self.determine_sig_state()

@@ -26,7 +26,7 @@ def close_positions(symbol, dry_run=False):
                         Mt5.ORDER_TYPE_SELL if p.type == Mt5.POSITION_TYPE_BUY
                         else Mt5.ORDER_TYPE_BUY
                     ),
-                    'type_filling': Mt5.ORDER_FILLING_RETURN,
+                    'type_filling': Mt5.ORDER_FILLING_FOK,
                     'type_time': Mt5.ORDER_TIME_GTC,
                     'position': p.ticket
                 },
