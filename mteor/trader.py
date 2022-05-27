@@ -5,7 +5,7 @@ import os
 import signal
 import time
 from datetime import timedelta
-from math import ceil
+from math import floor
 from pprint import pformat
 
 import MetaTrader5 as Mt5
@@ -142,7 +142,7 @@ class Mt5TraderCore(object):
             raise Mt5ResponseError('Mt5.history_deals_get() failed.')
 
     def _refresh_unit_margin_and_volume(self):
-        unit_lot = ceil(
+        unit_lot = floor(
             self.account_info.balance * self.__unit_margin_ratio
             / self.min_margins['ask']
         )
@@ -159,7 +159,7 @@ class Mt5TraderCore(object):
         )
         self.__logger.debug(f'self.avail_margin: {self.avail_margin}')
         self.avail_volume = (
-            ceil(self.avail_margin / self.min_margins['ask'])
+            floor(self.avail_margin / self.min_margins['ask'])
             * self.symbol_info.volume_min
         )
         self.__logger.debug(f'self.avail_volume: {self.avail_volume}')
@@ -333,12 +333,13 @@ class Mt5TraderCore(object):
 
 
 class AutoTrader(Mt5TraderCore):
-    def __init__(self, tick_seconds=3600, hv_granularity='M1', hv_count=86400,
-                 hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
-                 signal_ema_span=1024, significance_level=0.01,
-                 interval_seconds=0, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, symbols, tick_seconds=3600, hv_granularity='M1',
+                 hv_count=86400, hv_ema_span=60, max_spread_ratio=0.01,
+                 sleeping_ratio=0, signal_ema_span=1024,
+                 significance_level=0.01, interval_seconds=0, **kwargs):
+        super().__init__(symbol=None, **kwargs)
         self.__logger = logging.getLogger(__name__)
+        self.symbols = symbols
         self.signal_detector = SignalDetector(
             signal_ema_span=int(signal_ema_span),
             significance_level=float(significance_level)
@@ -356,8 +357,10 @@ class AutoTrader(Mt5TraderCore):
         self.print_log('!!! OPEN DEALS !!!')
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         while True:
-            self.refresh_mt5_caches()
-            self.make_decision()
+            for s in self.symbols:
+                self.symbol = s
+                self.refresh_mt5_caches()
+                self.make_decision()
             time.sleep(self.__interval_seconds)
 
     def make_decision(self):

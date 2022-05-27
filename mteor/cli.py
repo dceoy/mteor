@@ -25,7 +25,8 @@ Usage:
         [--mt5-password=<str>] [--mt5-server=<str>] [--hours=<float>]
         [--date-to=<date>]
     mteor close [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
-        [--mt5-password=<str>] [--mt5-server=<str>] [--dry-run] <instrument>
+        [--mt5-password=<str>] [--mt5-server=<str>] [--dry-run]
+        <instrument>...
     mteor open [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>] [--betting-strategy=<str>]
         [--history-hours=<float>] [--unit-margin=<ratio>]
@@ -34,7 +35,7 @@ Usage:
         [--tick-seconds=<float>] [--hv-granularity=<str>] [--hv-count=<int>]
         [--hv-ema-span=<int>] [--max-spread=<float>] [--sleeping=<ratio>]
         [--signal-ema-span=<int>] [--significance-level=<float>]
-        [--interval-seconds=<float>] [--quiet] [--dry-run] <instrument>
+        [--interval-seconds=<float>] [--quiet] [--dry-run] <instrument>...
 
 Commands:
     mt5                 Print MetaTrader 5 versions, status, and settings
@@ -126,7 +127,7 @@ def main():
         if args.get('open'):
             logger.info('Autonomous trading')
             AutoTrader(
-                symbol=args['<instrument>'],
+                symbols=args['<instrument>'],
                 betting_strategy=args['--betting-strategy'],
                 history_hours=args['--history-hours'],
                 unit_margin_ratio=args['--unit-margin'],
@@ -168,7 +169,7 @@ def main():
             print_deals(hours=args['--hours'], date_to=args['--date-to'])
         elif args['close']:
             close_positions(
-                symbol=args['<instrument>'], dry_run=args['--dry-run']
+                symbols=args['<instrument>'], dry_run=args['--dry-run']
             )
         else:
             pass

@@ -9,29 +9,31 @@ import MetaTrader5 as Mt5
 from .util import Mt5ResponseError, print_json
 
 
-def close_positions(symbol, dry_run=False):
+def close_positions(symbols, dry_run=False):
     logger = logging.getLogger(__name__)
-    logger.info(f'symbol: {symbol}, dry_run: {dry_run}')
-    positions = Mt5.positions_get(symbol=symbol)
-    logger.debug(f'positions: {positions}')
-    if not positions:
-        logger.info(f'No position for {symbol}.')
-    else:
-        for p in positions:
-            _send_or_check_order(
-                request={
-                    'action': Mt5.TRADE_ACTION_DEAL,
-                    'symbol': p.symbol, 'volume': p.volume,
-                    'type': (
-                        Mt5.ORDER_TYPE_SELL if p.type == Mt5.POSITION_TYPE_BUY
-                        else Mt5.ORDER_TYPE_BUY
-                    ),
-                    'type_filling': Mt5.ORDER_FILLING_FOK,
-                    'type_time': Mt5.ORDER_TIME_GTC,
-                    'position': p.ticket
-                },
-                only_check=dry_run
-            )
+    logger.info(f'symbols: {symbols}, dry_run: {dry_run}')
+    for s in symbols:
+        positions = Mt5.positions_get(symbol=s)
+        logger.debug(f'positions: {positions}')
+        if not positions:
+            logger.info(f'No position for {s}.')
+        else:
+            for p in positions:
+                _send_or_check_order(
+                    request={
+                        'action': Mt5.TRADE_ACTION_DEAL,
+                        'symbol': p.symbol, 'volume': p.volume,
+                        'type': (
+                            Mt5.ORDER_TYPE_SELL
+                            if p.type == Mt5.POSITION_TYPE_BUY
+                            else Mt5.ORDER_TYPE_BUY
+                        ),
+                        'type_filling': Mt5.ORDER_FILLING_FOK,
+                        'type_time': Mt5.ORDER_TIME_GTC,
+                        'position': p.ticket
+                    },
+                    only_check=dry_run
+                )
 
 
 def _send_or_check_order(request, only_check=False):
