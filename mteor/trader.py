@@ -49,8 +49,8 @@ class Mt5TraderCore(object):
         self.position_side = None
 
     def refresh_mt5_caches(self):
-        self._refresh_account_cache()
-        self._refresh_symbol_cache()
+        self._refresh_account_info_cache()
+        self._refresh_symbol_info_cache()
         self._refresh_symbol_info_tick_cache()
         self._refresh_position_cache()
         self._refresh_order_cache()
@@ -58,13 +58,13 @@ class Mt5TraderCore(object):
         self._refresh_history_deal_cache()
         self._refresh_unit_margin_and_volume()
 
-    def _refresh_account_cache(self):
+    def _refresh_account_info_cache(self):
         self.account_info = Mt5.account_info()
         self.__logger.debug(f'self.account_info: {self.account_info}')
         if not self.account_info:
             raise Mt5ResponseError('Mt5.account_info() failed.')
 
-    def _refresh_symbol_cache(self):
+    def _refresh_symbol_info_cache(self):
         self.symbol_info = Mt5.symbol_info(self.symbol)
         self.__logger.debug(f'self.symbol_info: {self.symbol_info}')
         if not self.symbol_info:
@@ -165,6 +165,7 @@ class Mt5TraderCore(object):
         self.__logger.debug(f'self.avail_volume: {self.avail_volume}')
 
     def close_positions(self, **kwargs):
+        self._refresh_position_cache()
         if not self.positions:
             self.__logger.info(f'No position for {self.symbol}.')
         else:
@@ -285,6 +286,9 @@ class Mt5TraderCore(object):
             print(data, flush=True)
 
     def is_margin_lack(self):
+        self._refresh_account_info_cache()
+        self._refresh_unit_margin_and_volume()
+        self._refresh_position_cache()
         return (
             (not self.positions) and (
                 self.unit_margin >= self.account_info.margin_free
@@ -336,7 +340,8 @@ class AutoTrader(Mt5TraderCore):
     def __init__(self, symbols, tick_seconds=3600, hv_granularity='M1',
                  hv_count=86400, hv_ema_span=60, max_spread_ratio=0.01,
                  sleeping_ratio=0, lrr_ema_span=1000, sr_ema_span=1000,
-                 significance_level=0.01, interval_seconds=0, **kwargs):
+                 significance_level=0.01, interval_seconds=0, retry_count=1,
+                 **kwargs):
         super().__init__(symbol=None, **kwargs)
         self.__logger = logging.getLogger(__name__)
         self.symbols = symbols
@@ -351,6 +356,7 @@ class AutoTrader(Mt5TraderCore):
         self.__max_spread_ratio = float(max_spread_ratio)
         self.__sleeping_ratio = float(sleeping_ratio)
         self.__interval_seconds = float(interval_seconds)
+        self.__retry_count = int(retry_count)
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
     def invoke(self):
@@ -359,8 +365,19 @@ class AutoTrader(Mt5TraderCore):
         while True:
             for s in self.symbols:
                 self.symbol = s
-                self.refresh_mt5_caches()
-                self.make_decision()
+                for r in range(self.__retry_count + 1):
+                    try:
+                        self.refresh_mt5_caches()
+                        self.make_decision()
+                    except Mt5ResponseError as e:
+                        if r < self.__retry_count:
+                            self.__logger.warning(
+                                f'Retry due to an MT5 response error: {e}'
+                            )
+                        else:
+                            raise e
+                    else:
+                        break
             time.sleep(self.__interval_seconds)
 
     def make_decision(self):

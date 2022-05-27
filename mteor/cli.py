@@ -35,8 +35,8 @@ Usage:
         [--tick-seconds=<float>] [--hv-granularity=<str>] [--hv-count=<int>]
         [--hv-ema-span=<int>] [--max-spread=<float>] [--sleeping=<ratio>]
         [--lrr-ema-span=<int>] [--sr-ema-span=<int>]
-        [--significance-level=<float>] [--interval-seconds=<float>] [--quiet]
-        [--dry-run] <instrument>...
+        [--significance-level=<float>] [--interval-seconds=<float>]
+        [--retry-count=<int>] [--quiet] [--dry-run] <instrument>...
 
 Commands:
     mt5                 Print MetaTrader 5 versions, status, and settings
@@ -100,6 +100,8 @@ Options:
                         Specify the significance level [default: 0.01]
     --interval-seconds=<float>
                         Wait seconds between iterations [default: 0]
+    --retry-count=<int>
+                        Set the retry count due to API errors [default: 1]
 
 Arguments:
     <instrument>        Financial instrument symbol
@@ -147,7 +149,8 @@ def main():
                 sr_ema_span=args['--sr-ema-span'],
                 significance_level=args['--significance-level'],
                 interval_seconds=args['--interval-seconds'],
-                quiet=args['--quiet'], dry_run=args['--dry-run']
+                retry_count=args['--retry-count'], quiet=args['--quiet'],
+                dry_run=args['--dry-run']
             ).invoke()
         elif args['mt5']:
             print_mt5_info()

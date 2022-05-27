@@ -47,9 +47,11 @@ class SignalDetector(object):
               or (sr_ema_ci[1] < 0 and sig['lrr_ema'] < 0)):
             act = 'short'
         elif ((position_side == 'short'
-               and sig['lrr_ema'] > 0 and sig['sr_ema'] > 0)
-              or (position_side == 'long' and sig['lrr_ema'] < 0
-                  and sig['sr_ema'] < 0)):
+               and ((sig['lrr_ema'] > 0 and sig['sr_ema'] > 0)
+                    or lrr_ema_ci[0] > 0 or sr_ema_ci[0] > 0))
+              or (position_side == 'long'
+                  and ((sig['lrr_ema'] < 0 and sig['sr_ema'] < 0)
+                       or lrr_ema_ci[1] < 0 or sr_ema_ci[1] < 0))):
             act = 'closing'
         else:
             act = None
