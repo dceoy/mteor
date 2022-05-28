@@ -29,7 +29,7 @@ Usage:
         <instrument>...
     mteor open [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>] [--betting-strategy=<str>]
-        [--history-hours=<float>] [--unit-margin=<ratio>]
+        [--history-hours=<float>] [--unit-volume=<float>|--unit-margin=<ratio>]
         [--preserved-margin=<ratio>] [--take-profit-limit=<float>]
         [--stop-loss-limit=<float>] [--trailing-stop-limit=<float>]
         [--tick-seconds=<float>] [--hv-granularity=<str>] [--hv-count=<int>]
@@ -72,14 +72,15 @@ Options:
                         {constant, martingale, paroli, dalembert, oscarsgrind}
     --history-hours=<float>
                         Specify hours for deal history [default: 24]
-    --unit-margin=<ratio>
-                        Specify the unit margin ratio to NAV [default: 0.1]
+    --unit-volume=<float>, --unit-margin=<ratio>
+                        Specify the unit margin ratio to NAV [default: 1]
     --preserved-margin=<ratio>
                         Specify the preserved margin ratio [default: 0.01]
     --take-profit-limit=<float>
                         Specify the take-profit limit ratio [default: 0.01]
     --trailing-stop-limit=<float>
                         Specify the trailing-stop limit ratio [default: 0.01]
+                        (option not yet implemented)
     --stop-loss-limit=<float>
                         Specify the stop-loss limit ratio [default: 0.01]
     --tick-seconds=<float>
@@ -135,6 +136,7 @@ def main():
                 symbols=args['<instrument>'],
                 betting_strategy=args['--betting-strategy'],
                 history_hours=args['--history-hours'],
+                unit_volume=args['--unit-volume'],
                 unit_margin_ratio=args['--unit-margin'],
                 preserved_margin_ratio=args['--preserved-margin'],
                 take_profit_limit_ratio=args['--take-profit-limit'],

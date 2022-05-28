@@ -19,14 +19,20 @@ from .util import Mt5ResponseError
 
 class Mt5TraderCore(object):
     def __init__(self, symbol, betting_strategy='constant', history_hours=24,
-                 unit_margin_ratio=0.01, preserved_margin_ratio=0.01,
-                 take_profit_limit_ratio=0.01, stop_loss_limit_ratio=0.01,
-                 trailing_stop_limit_ratio=0.01, quiet=False, dry_run=False):
+                 unit_volume=1, unit_margin_ratio=None,
+                 preserved_margin_ratio=0.01, take_profit_limit_ratio=0.01,
+                 stop_loss_limit_ratio=0.01, trailing_stop_limit_ratio=0.01,
+                 quiet=False, dry_run=False):
         self.__logger = logging.getLogger(__name__)
         self.symbol = symbol
         self.betting_system = BettingSystem(strategy=betting_strategy)
         self.__history_hours = float(history_hours)
-        self.__unit_margin_ratio = float(unit_margin_ratio)
+        if unit_volume:
+            self.__fixed_unit_volume = float(unit_volume)
+            self.__unit_margin_ratio = None
+        else:
+            self.__fixed_unit_volume = None
+            self.__unit_margin_ratio = float(unit_margin_ratio)
         self.__preserved_margin_ratio = float(preserved_margin_ratio)
         self.__take_profit_limit_ratio = float(take_profit_limit_ratio)
         self.__stop_loss_limit_ratio = float(stop_loss_limit_ratio)
@@ -142,14 +148,20 @@ class Mt5TraderCore(object):
             raise Mt5ResponseError('Mt5.history_deals_get() failed.')
 
     def _refresh_unit_margin_and_volume(self):
-        unit_lot = floor(
-            self.account_info.balance * self.__unit_margin_ratio
-            / self.min_margins['ask']
-        )
+        if self.__fixed_unit_volume:
+            unit_lot = floor(
+                self.__fixed_unit_volume / self.symbol_info.volume_min
+            )
+            self.unit_volume = self.__fixed_unit_volume
+        else:
+            unit_lot = floor(
+                self.account_info.balance * self.__unit_margin_ratio
+                / self.min_margins['ask']
+            )
+            self.unit_volume = self.symbol_info.volume_min * unit_lot
+        self.__logger.debug(f'self.unit_volume: {self.unit_volume}')
         self.unit_margin = self.min_margins['ask'] * unit_lot
         self.__logger.debug(f'self.unit_margin: {self.unit_margin}')
-        self.unit_volume = self.symbol_info.volume_min * unit_lot
-        self.__logger.debug(f'self.unit_volume: {self.unit_volume}')
         self.avail_margin = max(
             (
                 self.account_info.margin_free
