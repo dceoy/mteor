@@ -176,6 +176,32 @@ class Mt5TraderCore(object):
         )
         self.__logger.debug(f'self.avail_volume: {self.avail_volume}')
 
+    def trail_and_update_stop_loss(self, **kwargs):
+        self._refresh_position_cache()
+        if not self.positions:
+            self.__logger.info(f'No position for {self.symbol}.')
+        else:
+            self._refresh_symbol_info_tick_cache()
+            for p in self.positions:
+                if p.type == Mt5.POSITION_TYPE_SELL:
+                    new_sl = (
+                        self.symbol_info_tick.bid
+                        * (1 + self.__trailing_stop_limit_ratio)
+                    )
+                    trailing_sl = (new_sl if new_sl < p.sl or p.sl == 0 else 0)
+                else:
+                    new_sl = (
+                        self.symbol_info_tick.ask
+                        * (1 - self.__trailing_stop_limit_ratio)
+                    )
+                    trailing_sl = (new_sl if new_sl > p.sl or p.sl == 0 else 0)
+                if trailing_sl != 0:
+                    self._send_or_check_order({
+                        'action': Mt5.TRADE_ACTION_SLTP, 'symbol': p.symbol,
+                        'sl': trailing_sl, 'tp': p.tp, 'position': p.ticket,
+                        **kwargs
+                    })
+
     def close_positions(self, **kwargs):
         self._refresh_position_cache()
         if not self.positions:
@@ -218,6 +244,11 @@ class Mt5TraderCore(object):
                 and (act == 'closing' or act != self.position_side)):
             self.__logger.info(f'Close a position: {self.position_side}')
             self.close_positions()
+        elif self.position_side:
+            self.__logger.info(
+                f'Update a position stop loss: {self.position_side}'
+            )
+            self.trail_and_update_stop_loss()
         if act in ['long', 'short']:
             order_limits = self._determine_order_limits(side=act)
             order_volume = self._determine_order_volume()
@@ -238,23 +269,22 @@ class Mt5TraderCore(object):
 
     def _determine_order_limits(self, side):
         self._refresh_symbol_info_tick_cache()
-        price = getattr(
-            self.symbol_info_tick, {'long': 'ask', 'short': 'bid'}[side]
-        )
-        order_limits = {
-            'sl': (
-                price + (
-                    price * self.__stop_loss_limit_ratio
-                    * {'long': -1, 'short': 1}[side]
-                )
-            ),
-            'tp': (
-                price + (
-                    price * self.__take_profit_limit_ratio
-                    * {'long': 1, 'short': -1}[side]
-                )
+        if side == 'long':
+            sl = self.symbol_info_tick.ask * (1 - self.__stop_loss_limit_ratio)
+            tp = (
+                self.symbol_info_tick.ask
+                * (1 + self.__take_profit_limit_ratio)
             )
-        }
+        elif side == 'short':
+            sl = self.symbol_info_tick.bid * (1 + self.__stop_loss_limit_ratio)
+            tp = (
+                self.symbol_info_tick.bid
+                * (1 - self.__take_profit_limit_ratio)
+            )
+        else:
+            sl = None
+            tp = None
+        order_limits = {'sl': sl, 'tp': tp}
         self.__logger.debug(f'order_limits: {order_limits}')
         return order_limits
 

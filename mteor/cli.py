@@ -80,7 +80,6 @@ Options:
                         Specify the take-profit limit ratio [default: 0.01]
     --trailing-stop-limit=<float>
                         Specify the trailing-stop limit ratio [default: 0.01]
-                        (option not yet implemented)
     --stop-loss-limit=<float>
                         Specify the stop-loss limit ratio [default: 0.01]
     --tick-seconds=<float>
