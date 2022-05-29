@@ -72,8 +72,11 @@ Options:
                         {constant, martingale, paroli, dalembert, oscarsgrind}
     --history-hours=<float>
                         Specify hours for deal history [default: 24]
-    --unit-volume=<float>, --unit-margin=<ratio>
-                        Specify the unit margin ratio to NAV [default: 1]
+    --unit-volume=<float>
+                        Specify the unit volume to NAV [default: 1]
+    --unit-margin=<ratio>
+                        Specify the unit margin ratio to NAV
+                        (This overrides --unit-volume)
     --preserved-margin=<ratio>
                         Specify the preserved margin ratio [default: 0.01]
     --take-profit-limit=<float>

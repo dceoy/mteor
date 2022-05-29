@@ -27,12 +27,12 @@ class Mt5TraderCore(object):
         self.symbol = symbol
         self.betting_system = BettingSystem(strategy=betting_strategy)
         self.__history_hours = float(history_hours)
-        if unit_volume:
-            self.__fixed_unit_volume = float(unit_volume)
-            self.__unit_margin_ratio = None
-        else:
-            self.__fixed_unit_volume = None
+        if unit_margin_ratio:
             self.__unit_margin_ratio = float(unit_margin_ratio)
+            self.unit_volume = None
+        else:
+            self.__unit_margin_ratio = None
+            self.unit_volume = float(unit_volume)
         self.__preserved_margin_ratio = float(preserved_margin_ratio)
         self.__take_profit_limit_ratio = float(take_profit_limit_ratio)
         self.__stop_loss_limit_ratio = float(stop_loss_limit_ratio)
@@ -48,7 +48,6 @@ class Mt5TraderCore(object):
         self.history_deals = list()
         self.last_tick_time = None
         self.unit_margin = None
-        self.unit_volume = None
         self.avail_margin = None
         self.avail_volume = None
         self.position_volumes = dict()
@@ -148,17 +147,14 @@ class Mt5TraderCore(object):
             raise Mt5ResponseError('Mt5.history_deals_get() failed.')
 
     def _refresh_unit_margin_and_volume(self):
-        if self.__fixed_unit_volume:
-            unit_lot = floor(
-                self.__fixed_unit_volume / self.symbol_info.volume_min
-            )
-            self.unit_volume = self.__fixed_unit_volume
-        else:
+        if self.__unit_margin_ratio:
             unit_lot = floor(
                 self.account_info.balance * self.__unit_margin_ratio
                 / self.min_margins['ask']
             )
             self.unit_volume = self.symbol_info.volume_min * unit_lot
+        else:
+            unit_lot = floor(self.unit_volume / self.symbol_info.volume_min)
         self.__logger.debug(f'self.unit_volume: {self.unit_volume}')
         self.unit_margin = self.min_margins['ask'] * unit_lot
         self.__logger.debug(f'self.unit_margin: {self.unit_margin}')
