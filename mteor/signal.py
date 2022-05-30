@@ -18,11 +18,11 @@ class SignalDetector(object):
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
     def detect(self, df_tick, position_side=None):
-        df_sig = self._calculate_sharpe_ratio(
-            df_lrr=self._calculate_log_return_rate(
-                df_tick=df_tick, span=self.lrr_ema_span
+        df_sig = self._calculate_log_return_rate(
+            df_sr=self._calculate_sharpe_ratio(
+                df_tick=df_tick, span=self.sr_ema_span
             ),
-            span=self.sr_ema_span
+            span=self.lrr_ema_span
         )
         sig = (
             df_sig.iloc[-1].to_dict() if df_sig.shape[0] > 0
@@ -79,36 +79,35 @@ class SignalDetector(object):
         }
 
     @staticmethod
-    def _calculate_log_return_rate(df_tick, span):
+    def _calculate_sharpe_ratio(df_tick, span):
         return df_tick.assign(
-            mid=lambda d: d[['ask', 'bid']].mean(axis=1),
+            log_return=lambda d: np.log(d[['ask', 'bid']].mean(axis=1)).diff(),
             delta_sec=lambda d: d.index.to_series().diff().dt.total_seconds()
         ).assign(
-            log_return=lambda d: np.log(d['mid']).diff()
+            log_return_rate=lambda d: (d['log_return'] / d['delta_sec'])
         ).assign(
-            lrr=lambda d: (d['log_return'] / d['delta_sec'])
-        ).assign(
-            lrr_ema=lambda d: d['lrr'].ewm(span=span, adjust=False).mean(),
-            lrr_emse=lambda d:
-            np.sqrt(d['lrr'].ewm(span=span, adjust=False).var(ddof=1) / span)
-        )
-
-    @staticmethod
-    def _calculate_sharpe_ratio(df_lrr, span):
-        return df_lrr.assign(
-            pl_per_sec=lambda d: (np.exp(d['lrr']) - 1),
-            spread=lambda d: (d['ask'] - d['bid'])
+            pl_ratio=lambda d: (np.exp(d['log_return_rate']) - 1)
         ).assign(
             sharpe_ratio=lambda d: (
-                d['pl_per_sec']
-                * (d['spread'].rolling(window=span).mean() / d['spread'])
-                / d['pl_per_sec'].rolling(window=span).std(ddof=1)
+                d['pl_ratio'] * d['bid'] / d['ask']
+                / d['pl_ratio'].rolling(window=span).std(ddof=1)
             )
         ).assign(
             sr_ema=lambda d:
             d['sharpe_ratio'].ewm(span=span, adjust=False).mean(),
             sr_emse=lambda d: np.sqrt(
                 d['sharpe_ratio'].ewm(span=span, adjust=False).var(ddof=1)
+                / span
+            )
+        )
+
+    @staticmethod
+    def _calculate_log_return_rate(df_sr, span):
+        return df_sr.assign(
+            lrr_ema=lambda d:
+            d['log_return_rate'].ewm(span=span, adjust=False).mean(),
+            lrr_emse=lambda d: np.sqrt(
+                d['log_return_rate'].ewm(span=span, adjust=False).var(ddof=1)
                 / span
             )
         )
