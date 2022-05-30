@@ -159,19 +159,20 @@ def main():
         elif args['mt5']:
             print_mt5_info()
         elif args['symbol']:
-            print_symbol_info(symbol=args['<instrument>'])
+            print_symbol_info(symbol=args['<instrument>'][0])
         elif args['rate']:
             print_rates(
-                symbol=args['<instrument>'], granularity=args['--granularity'],
-                count=args['--count'], csv_path=args['--csv']
+                symbol=args['<instrument>'][0],
+                granularity=args['--granularity'], count=args['--count'],
+                csv_path=args['--csv']
             )
         elif args['tick']:
             print_ticks(
-                symbol=args['<instrument>'], seconds=args['--seconds'],
+                symbol=args['<instrument>'][0], seconds=args['--seconds'],
                 date_to=args['--date-to'], csv_path=args['--csv']
             )
         elif args['margin']:
-            print_margins(symbol=args['<instrument>'])
+            print_margins(symbol=args['<instrument>'][0])
         elif args['position']:
             print_positions()
         elif args['order']:

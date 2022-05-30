@@ -180,15 +180,21 @@ class Mt5TraderCore(object):
             self._refresh_symbol_info_tick_cache()
             for p in self.positions:
                 if p.type == Mt5.POSITION_TYPE_SELL:
-                    new_sl = (
-                        self.symbol_info_tick.bid
-                        * (1 + self.__trailing_stop_limit_ratio)
+                    new_sl = round(
+                        (
+                            self.symbol_info_tick.bid
+                            * (1 + self.__trailing_stop_limit_ratio)
+                        ),
+                        self.symbol_info.digits
                     )
                     trailing_sl = (new_sl if new_sl < p.sl or p.sl == 0 else 0)
                 else:
-                    new_sl = (
-                        self.symbol_info_tick.ask
-                        * (1 - self.__trailing_stop_limit_ratio)
+                    new_sl = round(
+                        (
+                            self.symbol_info_tick.ask
+                            * (1 - self.__trailing_stop_limit_ratio)
+                        ),
+                        self.symbol_info.digits
                     )
                     trailing_sl = (new_sl if new_sl > p.sl or p.sl == 0 else 0)
                 if trailing_sl != 0:

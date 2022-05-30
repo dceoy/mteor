@@ -67,7 +67,7 @@ def print_ticks(symbol, seconds, date_to=None, csv_path=None):
         + f', csv_path: {csv_path}'
     )
     print_df(
-        _fetch_df_tick(symbol=symbol, seconds=seconds, date_to=date_to),
+        _fetch_df_tick(symbol=symbol, seconds=float(seconds), date_to=date_to),
         csv_path=csv_path
     )
 

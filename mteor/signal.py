@@ -96,12 +96,13 @@ class SignalDetector(object):
     @staticmethod
     def _calculate_sharpe_ratio(df_lrr, span):
         return df_lrr.assign(
-            return_per_sec=lambda d: (np.exp(d['lrr']) - 1),
-            spread_ratio=lambda d: (1 - ((d['ask'] - d['bid']) / d['mid']))
+            pl_per_sec=lambda d: (np.exp(d['lrr']) - 1),
+            spread=lambda d: (d['ask'] - d['bid'])
         ).assign(
             sharpe_ratio=lambda d: (
-                d['return_per_sec'] * d['spread_ratio']
-                / d['return_per_sec'].rolling(window=span).std(ddof=1)
+                d['pl_per_sec']
+                * (d['spread'].rolling(window=span).mean() / d['spread'])
+                / d['pl_per_sec'].rolling(window=span).std(ddof=1)
             )
         ).assign(
             sr_ema=lambda d:
