@@ -60,15 +60,26 @@ def print_margins(symbol):
     })
 
 
-def print_ticks(symbol, seconds, date_to=None, csv_path=None):
+def print_ticks(symbol, seconds, date_to=None, csv_path=None, thin=False):
     logger = logging.getLogger(__name__)
     logger.info(
         f'symbol: {symbol}, seconds: {seconds}, date_to: {date_to}'
         + f', csv_path: {csv_path}'
     )
+    df_tick = _fetch_df_tick(
+        symbol=symbol, seconds=float(seconds), date_to=date_to
+    )
     print_df(
-        _fetch_df_tick(symbol=symbol, seconds=float(seconds), date_to=date_to),
+        (_thin_df_tick(df_tick=df_tick) if thin else df_tick),
         csv_path=csv_path
+    )
+
+
+def _thin_df_tick(df_tick):
+    return df_tick.reset_index()[['time', 'bid', 'ask']].groupby('time').pipe(
+        lambda g: g.tail(1).set_index('time').join(
+            g.size().to_frame('tick_volume'), how='left'
+        )
     )
 
 

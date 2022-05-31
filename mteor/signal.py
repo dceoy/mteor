@@ -84,7 +84,10 @@ class SignalDetector(object):
             log_return=lambda d: np.log(d[['ask', 'bid']].mean(axis=1)).diff(),
             delta_sec=lambda d: d.index.to_series().diff().dt.total_seconds()
         ).assign(
-            log_return_rate=lambda d: (d['log_return'] / d['delta_sec'])
+            log_return_rate=lambda d: (
+                d['log_return'] / d['delta_sec']
+                * (d['tick_volume'] / d['tick_volume'].mean())
+            )
         ).assign(
             pl_ratio=lambda d: (np.exp(d['log_return_rate']) - 1)
         ).assign(

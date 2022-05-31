@@ -344,7 +344,7 @@ class Mt5TraderCore(object):
             )
         )
 
-    def fetch_df_tick(self, tick_seconds=60):
+    def fetch_df_tick(self, tick_seconds=60, thin=True):
         self._refresh_symbol_info_tick_cache()
         date_from = self.last_tick_time - timedelta(seconds=tick_seconds)
         date_to = self.last_tick_time + timedelta(seconds=tick_seconds)
@@ -355,13 +355,26 @@ class Mt5TraderCore(object):
         if not isinstance(ticks, np.ndarray):
             raise Mt5ResponseError('Mt5.copy_ticks_range() failed.')
         else:
-            df_tick = pd.DataFrame(ticks)[[
-                'time_msc', 'bid', 'ask'
-            ]].assign(
-                time_msc=lambda d: pd.to_datetime(d['time_msc'], unit='ms')
-            ).set_index('time_msc')
+            df_raw_tick = pd.DataFrame(ticks)
+            df_tick = (
+                self._thin_df_tick(
+                    df_tick=df_raw_tick[['time', 'bid', 'ask']].assign(
+                        time=lambda d: pd.to_datetime(d['time'], unit='s')
+                    )
+                ) if thin else df_raw_tick[['time_msc', 'bid', 'ask']].assign(
+                    time_msc=lambda d: pd.to_datetime(d['time_msc'], unit='ms')
+                ).set_index('time_msc')
+            )
             self.__logger.debug(f'df_tick.shape: {df_tick.shape}')
             return df_tick
+
+    @staticmethod
+    def _thin_df_tick(df_tick):
+        return df_tick.groupby('time').pipe(
+            lambda g: g.tail(1).set_index('time').join(
+                g.size().to_frame('tick_volume'), how='left'
+            )
+        )
 
     def fetch_df_rate(self, granularity='M1', count=86400):
         rates = Mt5.copy_rates_from_pos(
@@ -381,11 +394,10 @@ class Mt5TraderCore(object):
 
 
 class AutoTrader(Mt5TraderCore):
-    def __init__(self, symbols, tick_seconds=3600, hv_granularity='M1',
-                 hv_count=86400, hv_ema_span=60, max_spread_ratio=0.01,
-                 sleeping_ratio=0, lrr_ema_span=1000, sr_ema_span=1000,
-                 significance_level=0.01, interval_seconds=0, retry_count=1,
-                 **kwargs):
+    def __init__(self, symbols, hv_granularity='M1', hv_count=86400,
+                 hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
+                 lrr_ema_span=1000, sr_ema_span=1000, significance_level=0.01,
+                 interval_seconds=0, retry_count=1, **kwargs):
         super().__init__(symbol=None, **kwargs)
         self.__logger = logging.getLogger(__name__)
         self.symbols = symbols
@@ -393,7 +405,12 @@ class AutoTrader(Mt5TraderCore):
             lrr_ema_span=int(lrr_ema_span), sr_ema_span=int(sr_ema_span),
             significance_level=float(significance_level)
         )
-        self.__tick_seconds = float(tick_seconds)
+        self.__tick_seconds = (
+            max(
+                self.signal_detector.lrr_ema_span,
+                self.signal_detector.sr_ema_span
+            ) * 10
+        )
         self.__hv_granularity = hv_granularity
         self.__hv_count = int(hv_count)
         self.__hv_ema_span = int(hv_ema_span)
@@ -466,19 +483,13 @@ class AutoTrader(Mt5TraderCore):
             ) if self.position_side else 0
         )
         sleep_triggers = self._check_volume_and_volatility()
-        df_tick = self.fetch_df_tick(
-            tick_seconds=self.__tick_seconds
-        )[['bid', 'ask']]
+        df_tick = self.fetch_df_tick(tick_seconds=self.__tick_seconds)
         sig = self.signal_detector.detect(
             df_tick=df_tick, position_side=self.position_side
         )
-        if not self._is_tradable(df_tick=df_tick):
+        if self._has_few_ticks(df_tick=df_tick):
             act = None
-            state = 'TRADING HALTED'
-        elif (df_tick.shape[0] < self.signal_detector.lrr_ema_span
-              or df_tick.shape[0] < self.signal_detector.sr_ema_span):
-            act = None
-            state = 'TOO FEW TICKS'
+            state = 'FEW TICKS'
         elif self.position_side and sig['act'] == 'closing':
             act = 'closing'
             state = '{0} {1} ->'.format(pos_pct, self.position_side.upper())
@@ -493,7 +504,7 @@ class AutoTrader(Mt5TraderCore):
         elif self.is_margin_lack():
             act = None
             state = 'LACK OF FUNDS'
-        elif self._is_over_spread():
+        elif self._has_over_spread():
             act = None
             state = 'OVER-SPREAD'
         elif sig['act'] != 'closing' and sleep_triggers.all():
@@ -521,10 +532,15 @@ class AutoTrader(Mt5TraderCore):
             **{('sig_act' if k == 'act' else k): v for k, v in sig.items()}
         }
 
-    def _is_tradable(self, df_tick):
-        return (df_tick.shape[0] > 0)
+    def _has_few_ticks(self, df_tick):
+        return (
+            df_tick.shape[0] <= max(
+                self.signal_detector.lrr_ema_span,
+                self.signal_detector.sr_ema_span
+            )
+        )
 
-    def _is_over_spread(self):
+    def _has_over_spread(self):
         spread_ratio = (
             (self.symbol_info_tick.ask - self.symbol_info_tick.bid)
             / (self.symbol_info_tick.ask + self.symbol_info_tick.bid) * 2

@@ -14,7 +14,7 @@ Usage:
         [--granularity=<str>] [--count=<int>] <instrument>
     mteor tick [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>] [--csv=<path>]
-        [--seconds=<float>] [--date-to=<date>] <instrument>
+        [--seconds=<float>] [--date-to=<date>] [--thin] <instrument>
     mteor margin [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
         [--mt5-password=<str>] [--mt5-server=<str>] <instrument>
     mteor position [--debug|--info] [--mt5-exe=<path>] [--mt5-login=<str>]
@@ -32,11 +32,11 @@ Usage:
         [--history-hours=<float>] [--unit-volume=<float>|--unit-margin=<ratio>]
         [--preserved-margin=<ratio>] [--take-profit-limit=<float>]
         [--stop-loss-limit=<float>] [--trailing-stop-limit=<float>]
-        [--tick-seconds=<float>] [--hv-granularity=<str>] [--hv-count=<int>]
-        [--hv-ema-span=<int>] [--max-spread=<float>] [--sleeping=<ratio>]
-        [--lrr-ema-span=<int>] [--sr-ema-span=<int>]
-        [--significance-level=<float>] [--interval-seconds=<float>]
-        [--retry-count=<int>] [--quiet] [--dry-run] <instrument>...
+        [--hv-granularity=<str>] [--hv-count=<int>] [--hv-ema-span=<int>]
+        [--max-spread=<float>] [--sleeping=<ratio>] [--lrr-ema-span=<int>]
+        [--sr-ema-span=<int>] [--significance-level=<float>]
+        [--interval-seconds=<float>] [--retry-count=<int>] [--quiet]
+        [--dry-run] <instrument>...
 
 Commands:
     mt5                 Print MetaTrader 5 versions, status, and settings
@@ -65,6 +65,7 @@ Options:
     --count=<int>       Specify a record count [default: 10]
     --seconds=<float>   Specify seconds to look back [default: 60]
     --date-to=<date>    Specify an ending datetime
+    --thin              Thin ticks by timestamp
     --hours=<float>     Specify hours to look back [default: 24]
     --dry-run           Invoke a command with dry-run mode
     --betting-strategy=<str>
@@ -85,8 +86,6 @@ Options:
                         Specify the trailing-stop limit ratio [default: 0.01]
     --stop-loss-limit=<float>
                         Specify the stop-loss limit ratio [default: 0.01]
-    --tick-seconds=<float>
-                        Specify seconds for tick history [default: 3600]
     --hv-granularity=<str>
                         Specify the granularity for HV [default: M1]
     --hv-count=<int>    Specify the count for HV [default: 86400]
@@ -144,7 +143,6 @@ def main():
                 take_profit_limit_ratio=args['--take-profit-limit'],
                 stop_loss_limit_ratio=args['--stop-loss-limit'],
                 trailing_stop_limit_ratio=args['--trailing-stop-limit'],
-                tick_seconds=args['--tick-seconds'],
                 hv_granularity=args['--hv-granularity'],
                 hv_count=args['--hv-count'], hv_ema_span=args['--hv-ema-span'],
                 max_spread_ratio=args['--max-spread'],
@@ -169,7 +167,8 @@ def main():
         elif args['tick']:
             print_ticks(
                 symbol=args['<instrument>'][0], seconds=args['--seconds'],
-                date_to=args['--date-to'], csv_path=args['--csv']
+                date_to=args['--date-to'], csv_path=args['--csv'],
+                thin=args['--thin']
             )
         elif args['margin']:
             print_margins(symbol=args['<instrument>'][0])
