@@ -40,11 +40,11 @@ class SignalDetector(object):
             scale=sig['sr_emse']
         )
         self.__logger.debug(f'sr_ema_ci: {sr_ema_ci}')
-        if ((lrr_ema_ci[0] > 0 and sig['sr_ema'] > 0)
-                or (sr_ema_ci[0] > 0 and sig['lrr_ema'] > 0)):
+        if ((sr_ema_ci[0] > 0 and lrr_ema_ci[1] > 0)
+                or (lrr_ema_ci[0] > 0 and sr_ema_ci[1] > 0)):
             act = 'long'
-        elif ((lrr_ema_ci[1] < 0 and sig['sr_ema'] < 0)
-              or (sr_ema_ci[1] < 0 and sig['lrr_ema'] < 0)):
+        elif ((sr_ema_ci[1] < 0 and lrr_ema_ci[0] < 0)
+              or (lrr_ema_ci[1] < 0 and sr_ema_ci[0] < 0)):
             act = 'short'
         elif ((position_side == 'short'
                and ((sig['lrr_ema'] > 0 and sig['sr_ema'] > 0)
