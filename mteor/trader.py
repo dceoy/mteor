@@ -11,6 +11,7 @@ from pprint import pformat
 import MetaTrader5 as Mt5
 import numpy as np
 import pandas as pd
+import scipy.stats as scs
 
 from .bet import BettingSystem
 from .signal import SignalDetector
@@ -392,12 +393,23 @@ class Mt5TraderCore(object):
             self.__logger.debug(f'df_rate.shape: {df_rate.shape}')
             return df_rate
 
+    def detect_trend_side(self, granularity='D1', count=30):
+        lr_coef = self.fetch_df_rate(
+            granularity=granularity, count=count
+        )[['close']].pipe(
+            lambda d:
+            scs.linregress(x=(d.index - d.index[0]).days, y=d['close'])
+        ).slope
+        self.__logger.debug(f'lr_coef: {lr_coef}')
+        return ('short' if lr_coef < 0 else 'long')
+
 
 class AutoTrader(Mt5TraderCore):
     def __init__(self, symbols, hv_granularity='M1', hv_count=86400,
                  hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
                  lrr_ema_span=1000, sr_ema_span=1000, significance_level=0.01,
-                 interval_seconds=0, retry_count=1, **kwargs):
+                 day_trend_suppressor=None, interval_seconds=0, retry_count=1,
+                 **kwargs):
         super().__init__(symbol=None, **kwargs)
         self.__logger = logging.getLogger(__name__)
         self.symbols = symbols
@@ -417,6 +429,7 @@ class AutoTrader(Mt5TraderCore):
         self.__max_spread_ratio = float(max_spread_ratio)
         self.__sleeping_ratio = float(sleeping_ratio)
         self.__interval_seconds = float(interval_seconds)
+        self.__day_trend_suppressor = int(day_trend_suppressor or 0)
         self.__retry_count = int(retry_count)
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
@@ -483,6 +496,10 @@ class AutoTrader(Mt5TraderCore):
             ) if self.position_side else 0
         )
         sleep_triggers = self._check_volume_and_volatility()
+        trend_side = (
+            self.detect_trend_side(count=self.__day_trend_suppressor)
+            if self.__day_trend_suppressor else None
+        )
         df_tick = self.fetch_df_tick(tick_seconds=self.__tick_seconds)
         sig = self.signal_detector.detect(
             df_tick=df_tick, position_side=self.position_side
@@ -490,7 +507,9 @@ class AutoTrader(Mt5TraderCore):
         if self._has_few_ticks(df_tick=df_tick):
             act = None
             state = 'FEW TICKS'
-        elif self.position_side and sig['act'] == 'closing':
+        elif (self.position_side
+              and (sig['act'] == 'closing'
+                   or (trend_side and sig['act'] != trend_side))):
             act = 'closing'
             state = '{0} {1} ->'.format(pos_pct, self.position_side.upper())
         elif int(self.account_info.balance) == 0:
@@ -519,6 +538,9 @@ class AutoTrader(Mt5TraderCore):
         elif not sig['act']:
             act = None
             state = '-'
+        elif trend_side and sig['act'] != trend_side:
+            act = None
+            state = 'CONTRARY TREND'
         elif self.position_side:
             act = sig['act']
             state = '{0} {1} -> {2}'.format(
