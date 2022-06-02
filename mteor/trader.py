@@ -150,7 +150,7 @@ class Mt5TraderCore(object):
     def _refresh_unit_margin_and_volume(self):
         if self.__unit_margin_ratio:
             unit_lot = floor(
-                self.account_info.balance * self.__unit_margin_ratio
+                self.account_info.equity * self.__unit_margin_ratio
                 / self.min_margins['ask']
             )
             self.unit_volume = self.symbol_info.volume_min * unit_lot
@@ -162,7 +162,7 @@ class Mt5TraderCore(object):
         self.avail_margin = max(
             (
                 self.account_info.margin_free
-                - self.account_info.balance * self.__preserved_margin_ratio
+                - self.account_info.equity * self.__preserved_margin_ratio
             ),
             0
         )
@@ -339,7 +339,7 @@ class Mt5TraderCore(object):
                 self.unit_margin >= self.account_info.margin_free
                 or self.unit_volume == 0
                 or (
-                    self.account_info.balance * self.__preserved_margin_ratio
+                    self.account_info.equity * self.__preserved_margin_ratio
                     >= self.account_info.margin_free
                 )
             )
@@ -466,7 +466,7 @@ class AutoTrader(Mt5TraderCore):
                             self.min_margins[
                                 {'long': 'ask', 'short': 'bid'}[st['act']]
                             ] / self.symbol_info.volume_min * new_volume
-                            / self.account_info.balance * 100
+                            / self.account_info.equity * 100
                         ),
                         1
                     )
@@ -490,7 +490,7 @@ class AutoTrader(Mt5TraderCore):
                     ) / self.symbol_info.volume_min
                     * self.min_margins[
                         {'long': 'ask', 'short': 'bid'}[self.position_side]
-                    ] / self.account_info.balance * 100
+                    ] / self.account_info.equity * 100
                 ),
                 1
             ) if self.position_side else 0
@@ -512,7 +512,7 @@ class AutoTrader(Mt5TraderCore):
                    or (trend_side and sig['act'] != trend_side))):
             act = 'closing'
             state = '{0} {1} ->'.format(pos_pct, self.position_side.upper())
-        elif int(self.account_info.balance) == 0:
+        elif int(self.account_info.equity) == 0:
             act = None
             state = 'NO FUND'
         elif (self.position_side
