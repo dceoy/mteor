@@ -29,17 +29,16 @@ class BettingSystem(object):
 
     def calculate_volume_by_pl(self, unit_volume, history_deals,
                                init_volume=None):
-        deals = [
+        entry_deals = [
             d for d in history_deals
-            if d.type in {Mt5.DEAL_TYPE_BUY, Mt5.DEAL_TYPE_SELL}
+            if d.entry and d.type in {Mt5.DEAL_TYPE_BUY, Mt5.DEAL_TYPE_SELL}
         ]
-        assert all([d.volume > 0 for d in deals])
-        last_volume = (deals[-1].volume if deals else 0)
+        last_volume = (entry_deals[-1].volume if entry_deals else 0)
         self.__logger.debug(f'last_volume: {last_volume}')
-        if not deals:
+        if not entry_deals:
             return last_volume or init_volume or unit_volume
         else:
-            pl = pd.Series([d.profit for d in deals], dtype=float)
+            pl = pd.Series([d.profit for d in entry_deals], dtype=float)
             if pl.iloc[-1] < 0:
                 won_last = False
             elif pl.iloc[-1] > 0 and pl[-2:].sum() > 0:
