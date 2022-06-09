@@ -39,17 +39,22 @@ class BettingSystem(object):
             return last_volume or init_volume or unit_volume
         else:
             pl = pd.Series([d.profit for d in entry_deals], dtype=float)
-            if pl.iloc[-1] < 0:
-                won_last = False
-            elif pl.iloc[-1] > 0 and pl[-2:].sum() > 0:
-                won_last = True
-            else:
+            if pl.size == 0:
+                all_time_high = False
                 won_last = None
+            else:
+                all_time_high = (pl.cumsum().idxmax() == pl.index[-1])
+                if pl.iloc[-1] < 0:
+                    won_last = False
+                elif pl.iloc[-1] > 0 and pl[-2:].sum() > 0:
+                    won_last = True
+                else:
+                    won_last = None
             self.__logger.debug(f'won_last: {won_last}')
             return self._calculate_volume(
                 unit_volume=unit_volume, init_volume=init_volume,
                 last_volume=last_volume, won_last=won_last,
-                all_time_high=(pl.cumsum().idxmax() == pl.index[-1])
+                all_time_high=all_time_high
             )
 
     def _calculate_volume(self, unit_volume, init_volume=None,
