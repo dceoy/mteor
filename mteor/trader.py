@@ -377,7 +377,7 @@ class Mt5TraderCore(object):
             )
         )
 
-    def fetch_df_rate(self, granularity='M1', count=86400):
+    def fetch_df_rate(self, granularity='M1', count=10080):
         rates = Mt5.copy_rates_from_pos(
             self.symbol, getattr(Mt5, f'TIMEFRAME_{granularity}'), 0, count
         )
@@ -405,10 +405,10 @@ class Mt5TraderCore(object):
 
 
 class AutoTrader(Mt5TraderCore):
-    def __init__(self, symbols, hv_granularity='M1', hv_count=86400,
+    def __init__(self, symbols, hv_granularity='M1', hv_count=10080,
                  hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
                  lrr_ema_span=1000, sr_ema_span=1000, significance_level=0.01,
-                 volume_factor=0, day_trend_suppressor=None,
+                 volume_factor=0, tick_seconds=3600, day_trend_suppressor=None,
                  interval_seconds=0, retry_count=1, **kwargs):
         super().__init__(symbol=None, **kwargs)
         self.__logger = logging.getLogger(__name__)
@@ -418,11 +418,9 @@ class AutoTrader(Mt5TraderCore):
             significance_level=float(significance_level),
             volume_factor=float(volume_factor)
         )
-        self.__tick_seconds = (
-            max(
-                self.signal_detector.lrr_ema_span,
-                self.signal_detector.sr_ema_span
-            ) * 10
+        self.__tick_seconds = max(
+            self.signal_detector.lrr_ema_span,
+            self.signal_detector.sr_ema_span, float(tick_seconds)
         )
         self.__hv_granularity = hv_granularity
         self.__hv_count = int(hv_count)
@@ -507,7 +505,7 @@ class AutoTrader(Mt5TraderCore):
         )
         if self._has_few_ticks(df_tick=df_tick):
             act = None
-            state = 'FEW TICKS'
+            state = 'FEW TICKS ({})'.format(df_tick.shape[0])
         elif (self.position_side
               and (sig['act'] == 'closing'
                    or (trend_side and sig['act'] != trend_side))):
@@ -560,7 +558,7 @@ class AutoTrader(Mt5TraderCore):
             df_tick.shape[0] <= max(
                 self.signal_detector.lrr_ema_span,
                 self.signal_detector.sr_ema_span
-            )
+            ) * 2
         )
 
     def _has_over_spread(self):

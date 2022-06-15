@@ -35,9 +35,9 @@ Usage:
         [--hv-granularity=<str>] [--hv-count=<int>] [--hv-ema-span=<int>]
         [--max-spread=<float>] [--sleeping=<ratio>] [--lrr-ema-span=<int>]
         [--sr-ema-span=<int>] [--significance-level=<float>]
-        [--volume-factor=<float>] [--day-trend-suppressor=<int>]
-        [--interval-seconds=<float>] [--retry-count=<int>] [--quiet]
-        [--dry-run] <instrument>...
+        [--volume-factor=<float>] [--tick-seconds=<float>]
+        [--day-trend-suppressor=<int>] [--interval-seconds=<float>]
+        [--retry-count=<int>] [--quiet] [--dry-run] <instrument>...
 
 Commands:
     mt5                 Print MetaTrader 5 versions, status, and settings
@@ -89,7 +89,7 @@ Options:
                         Specify the stop-loss limit ratio [default: 0.01]
     --hv-granularity=<str>
                         Specify the granularity for HV [default: M1]
-    --hv-count=<int>    Specify the count for HV [default: 86400]
+    --hv-count=<int>    Specify the count for HV [default: 10080]
     --hv-ema-span=<int>
                         Specify the EMA span for HV [default: 60]
     --max-spread=<float>
@@ -103,6 +103,8 @@ Options:
                         Specify the significance level [default: 0.01]
     --volume-factor=<float>
                         Specify the volume weight factor [default: 0]
+    --tick-seconds=<float>
+                        Specify seconds to look back [default: 3600]
     --day-trend-suppressor=<int>
                         Suppress contrary to the n-day trend
     --interval-seconds=<float>
@@ -156,6 +158,7 @@ def main():
                 sr_ema_span=args['--sr-ema-span'],
                 significance_level=args['--significance-level'],
                 volume_factor=args['--volume-factor'],
+                tick_seconds=args['--tick-seconds'],
                 day_trend_suppressor=args['--day-trend-suppressor'],
                 interval_seconds=args['--interval-seconds'],
                 retry_count=args['--retry-count'], quiet=args['--quiet'],
