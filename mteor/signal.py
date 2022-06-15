@@ -10,17 +10,19 @@ import scipy.stats as scs
 
 class SignalDetector(object):
     def __init__(self, lrr_ema_span=1000, sr_ema_span=1000,
-                 significance_level=0.01):
+                 significance_level=0.01, volume_factor=0):
         self.__logger = logging.getLogger(__name__)
         self.lrr_ema_span = lrr_ema_span
         self.sr_ema_span = sr_ema_span
         self.significance_level = significance_level
+        self.volume_factor = volume_factor
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
     def detect(self, df_tick, position_side=None):
         df_sig = self._calculate_log_return_rate(
             df_sr=self._calculate_sharpe_ratio(
-                df_tick=df_tick, span=self.sr_ema_span
+                df_tick=df_tick, span=self.sr_ema_span,
+                volume_factor=self.volume_factor
             ),
             span=self.lrr_ema_span
         )
@@ -79,15 +81,16 @@ class SignalDetector(object):
         }
 
     @staticmethod
-    def _calculate_sharpe_ratio(df_tick, span):
+    def _calculate_sharpe_ratio(df_tick, span, volume_factor=0):
         return df_tick.assign(
             log_return=lambda d: np.log(d[['ask', 'bid']].mean(axis=1)).diff(),
-            delta_sec=lambda d: d.index.to_series().diff().dt.total_seconds()
+            delta_sec=lambda d: d.index.to_series().diff().dt.total_seconds(),
+            volume_weight=lambda d: np.power(
+                d['tick_volume'], volume_factor
+            ).pipe(lambda s: (s / s.mean()))
         ).assign(
-            log_return_rate=lambda d: (
-                d['log_return'] / d['delta_sec']
-                * d['tick_volume'] / d['tick_volume'].mean()
-            )
+            log_return_rate=lambda d:
+            (d['log_return'] / d['delta_sec'] * d['volume_weight'])
         ).assign(
             pl_ratio=lambda d: (np.exp(d['log_return_rate']) - 1)
         ).assign(

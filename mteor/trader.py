@@ -408,14 +408,15 @@ class AutoTrader(Mt5TraderCore):
     def __init__(self, symbols, hv_granularity='M1', hv_count=86400,
                  hv_ema_span=60, max_spread_ratio=0.01, sleeping_ratio=0,
                  lrr_ema_span=1000, sr_ema_span=1000, significance_level=0.01,
-                 day_trend_suppressor=None, interval_seconds=0, retry_count=1,
-                 **kwargs):
+                 volume_factor=0, day_trend_suppressor=None,
+                 interval_seconds=0, retry_count=1, **kwargs):
         super().__init__(symbol=None, **kwargs)
         self.__logger = logging.getLogger(__name__)
         self.symbols = symbols
         self.signal_detector = SignalDetector(
             lrr_ema_span=int(lrr_ema_span), sr_ema_span=int(sr_ema_span),
-            significance_level=float(significance_level)
+            significance_level=float(significance_level),
+            volume_factor=float(volume_factor)
         )
         self.__tick_seconds = (
             max(

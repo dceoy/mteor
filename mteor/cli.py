@@ -35,8 +35,9 @@ Usage:
         [--hv-granularity=<str>] [--hv-count=<int>] [--hv-ema-span=<int>]
         [--max-spread=<float>] [--sleeping=<ratio>] [--lrr-ema-span=<int>]
         [--sr-ema-span=<int>] [--significance-level=<float>]
-        [--day-trend-suppressor=<int>] [--interval-seconds=<float>]
-        [--retry-count=<int>] [--quiet] [--dry-run] <instrument>...
+        [--volume-factor=<float>] [--day-trend-suppressor=<int>]
+        [--interval-seconds=<float>] [--retry-count=<int>] [--quiet]
+        [--dry-run] <instrument>...
 
 Commands:
     mt5                 Print MetaTrader 5 versions, status, and settings
@@ -100,6 +101,8 @@ Options:
                         Specify the EMA span for SR signal [default: 1000]
     --significance-level=<float>
                         Specify the significance level [default: 0.01]
+    --volume-factor=<float>
+                        Specify the volume weight factor [default: 0]
     --day-trend-suppressor=<int>
                         Suppress contrary to the n-day trend
     --interval-seconds=<float>
@@ -152,6 +155,7 @@ def main():
                 lrr_ema_span=args['--lrr-ema-span'],
                 sr_ema_span=args['--sr-ema-span'],
                 significance_level=args['--significance-level'],
+                volume_factor=args['--volume-factor'],
                 day_trend_suppressor=args['--day-trend-suppressor'],
                 interval_seconds=args['--interval-seconds'],
                 retry_count=args['--retry-count'], quiet=args['--quiet'],
