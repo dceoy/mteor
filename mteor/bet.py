@@ -9,7 +9,7 @@ import pandas as pd
 
 
 class BettingSystem(object):
-    def __init__(self, strategy='Martingale'):
+    def __init__(self, strategy='Martingale', strict=True):
         self.__logger = logging.getLogger(__name__)
         strategies = [
             'Martingale', 'Paroli', "d'Alembert", 'Pyramid', "Oscar's grind",
@@ -25,6 +25,7 @@ class BettingSystem(object):
             self.strategy = matched_strategy[0]
         else:
             raise ValueError(f'invalid strategy: {strategy}')
+        self.strict = strict
         self.__logger.debug('vars(self):' + os.linesep + pformat(vars(self)))
 
     def calculate_volume_by_pl(self, unit_volume, history_deals,
@@ -46,8 +47,20 @@ class BettingSystem(object):
                 all_time_high = (pl.cumsum().idxmax() == pl.index[-1])
                 if pl.iloc[-1] < 0:
                     won_last = False
-                elif pl.iloc[-1] > 0 and pl[-2:].sum() > 0:
-                    won_last = True
+                elif pl.iloc[-1] > 0:
+                    if self.strict:
+                        latest_profit = pl.iloc[-1]
+                        latest_loss = 0
+                        for v in pl.iloc[:-1].iloc[::-1]:
+                            if v <= 0:
+                                latest_loss += abs(v)
+                            elif latest_loss == 0:
+                                latest_profit += v
+                            else:
+                                break
+                        won_last = ((latest_profit > latest_loss) or None)
+                    else:
+                        won_last = True
                 else:
                     won_last = None
             self.__logger.debug(f'won_last: {won_last}')
