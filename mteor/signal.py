@@ -90,7 +90,7 @@ class SignalDetector(object):
             ).pipe(lambda s: (s / s.mean()))
         ).assign(
             log_return_rate=lambda d:
-            (d['log_return'] / d['delta_sec'] * d['volume_weight'])
+            (d['log_return'] / d['delta_sec'] * d['volume_weight']).fillna(0)
         ).assign(
             pl_ratio=lambda d: (np.exp(d['log_return_rate']) - 1)
         ).assign(

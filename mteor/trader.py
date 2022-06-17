@@ -527,10 +527,10 @@ class AutoTrader(Mt5TraderCore):
             state = 'OVER-SPREAD'
         elif sig['act'] != 'closing' and sleep_triggers.all():
             act = None
-            state = 'LOW HV AND VOLUME'
-        elif sig['act'] != 'closing' and sleep_triggers['hv_ema']:
+            state = 'LOW SR AND VOLUME'
+        elif sig['act'] != 'closing' and sleep_triggers['sr_ema']:
             act = None
-            state = 'LOW HV'
+            state = 'LOW SR'
         elif sig['act'] != 'closing' and sleep_triggers['volume_ema']:
             act = None
             state = 'LOW VOLUME'
@@ -576,9 +576,13 @@ class AutoTrader(Mt5TraderCore):
             volume_ema=lambda d: d['tick_volume'].ewm(
                 span=self.__hv_ema_span, adjust=False
             ).mean(skipna=True),
-            hv_ema=lambda d: np.log(d['close']).diff().ewm(
-                span=self.__hv_ema_span, adjust=False
-            ).std(ddof=1)
-        )[['volume_ema', 'hv_ema']].pipe(
+            sr_ema=lambda d:
+            (np.exp(np.log(d['close']).diff().fillna(0)) - 1).pipe(
+                lambda s: (
+                    s.ewm(span=self.__hv_ema_span, adjust=False).mean()
+                    / s.ewm(span=self.__hv_ema_span, adjust=False).std(ddof=1)
+                ).abs()
+            )
+        )[['volume_ema', 'sr_ema']].pipe(
             lambda d: (d.iloc[-1] < d.quantile(self.__sleeping_ratio))
         )
