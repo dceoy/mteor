@@ -504,7 +504,7 @@ class AutoTrader(Mt5TraderCore):
         )
         if self._has_few_ticks(df_tick=df_tick):
             act = None
-            state = 'FEW TICKS ({})'.format(df_tick.shape[0])
+            state = 'FEW TICKS ({})'.format(df_tick.shape[0] - 1)
         elif (self.position_side
               and (sig['act'] == 'closing'
                    or (trend_side and sig['act'] != trend_side))):
