@@ -494,6 +494,7 @@ class AutoTrader(Mt5TraderCore):
                 1
             ) if self.position_side else 0
         )
+        sleep_triggers = self._check_volume_and_volatility()
         trend_side = (
             self.detect_trend_side(count=self.__day_trend_suppressor)
             if self.__day_trend_suppressor else None
@@ -524,7 +525,13 @@ class AutoTrader(Mt5TraderCore):
         elif self._has_over_spread():
             act = None
             state = 'OVER-SPREAD'
-        elif sig['act'] != 'closing' and self._has_low_volume():
+        elif sig['act'] != 'closing' and sleep_triggers.all():
+            act = None
+            state = 'LOW HV AND VOLUME'
+        elif sig['act'] != 'closing' and sleep_triggers['hv_ema']:
+            act = None
+            state = 'LOW HV'
+        elif sig['act'] != 'closing' and sleep_triggers['volume_ema']:
             act = None
             state = 'LOW VOLUME'
         elif not sig['act']:
@@ -562,12 +569,16 @@ class AutoTrader(Mt5TraderCore):
         self.__logger.debug(f'spread_ratio: {spread_ratio}')
         return (spread_ratio >= self.__max_spread_ratio)
 
-    def _has_low_volume(self):
+    def _check_volume_and_volatility(self):
         return self.fetch_df_rate(
             granularity=self.__hv_granularity, count=self.__hv_count
-        ).pipe(
-            lambda d:
-            d['tick_volume'].ewm(span=self.__hv_ema_span, adjust=False).mean()
-        ).pipe(
-            lambda s: (s.iloc[-1] < s.quantile(self.__sleeping_ratio))
+        ).assign(
+            volume_ema=lambda d: d['tick_volume'].ewm(
+                span=self.__hv_ema_span, adjust=False
+            ).mean(skipna=True),
+            hv_ema=lambda d: np.log(d['close']).diff().ewm(
+                span=self.__hv_ema_span, adjust=False
+            ).std(ddof=1)
+        )[['volume_ema', 'hv_ema']].pipe(
+            lambda d: (d.iloc[-1] < d.quantile(self.__sleeping_ratio))
         )
